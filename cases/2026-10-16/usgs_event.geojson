@@ -1,0 +1,26 @@
+{
+  "type": "FeatureCollection",
+  "metadata": {
+    "note": "fixture in USGS GeoJSON shape; values from USGS reporting"
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "id": "fixture-kamchatka-20261016",
+      "properties": {
+        "mag": 6.9,
+        "magType": "mww",
+        "place": "76 km NE of Ozernovskiy, Russia",
+        "time": 1792121731000
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          157.27,
+          51.985,
+          135.0
+        ]
+      }
+    }
+  ]
+}

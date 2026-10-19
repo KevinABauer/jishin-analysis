@@ -1,0 +1,206 @@
+{
+  "solution": {
+    "hypo": {
+      "lat": 52.0804,
+      "lon": 157.6229,
+      "depth_km": 115.0,
+      "time": "2026-10-16T03:35:27.056124+00:00"
+    },
+    "mean_abs_res_s": 0.2294229838344474,
+    "region_km": 479.5305341458816,
+    "region_bearing": 46.498028057432975,
+    "azimuthal_gap": 338.8314968405337,
+    "nearest_station_km": 1284.079985823262,
+    "sep_from_reference_km": 26.364546905186256
+  },
+  "checks": [
+    {
+      "code": "D1",
+      "status": "FLAG",
+      "message": "alert (intensity): 526 km away; the FULL pick set rejects it (1.95 s vs 0.23 s). An alert computed from only the earliest picks can still land there — see below."
+    },
+    {
+      "code": "D1",
+      "status": "FLAG",
+      "message": "alert (magnitude): 657 km away; the FULL pick set rejects it (4.39 s vs 0.23 s). An alert computed from only the earliest picks can still land there — see below."
+    },
+    {
+      "code": "D1",
+      "status": "FLAG",
+      "message": "With the first 4 pick(s) the alert's hypocentre is as compatible with the data as the true one: an early-stage EEW solution could legitimately land there. Mislocation is explained by geometry; the failure is that nothing downstream caught it."
+    },
+    {
+      "code": "D4",
+      "status": "FLAG",
+      "message": "azimuthal gap 339°, nearest station 1284 km, stations lie toward bearing 230°. OUT-OF-NETWORK: distance along the back-azimuth trades off against origin time; relations calibrated on in-network events are being extrapolated."
+    },
+    {
+      "code": "D2",
+      "status": "FLAG",
+      "message": "No station lies within 700 km of the alert's magnitude hypocentre (nearest 1934 km). With the cutoff working, NO magnitude could have been computed and no warning issued. The published M can only have come from stations the cutoff should have excluded — the safeguard was not applied."
+    },
+    {
+      "code": "D2",
+      "status": "INFO",
+      "message": "[relation-dependent] at 1929 km, eew_illustrative gives ∂M/∂R = 0.32 per 100 km of distance error. Every 100 km the hypocentre is pushed away adds that much to M; at 700 km the same relation gives 0.38/100 km."
+    },
+    {
+      "code": "D2",
+      "status": "INFO",
+      "message": "[relation-dependent] eew_illustrative at the alert's magnitude hypocentre with no cutoff → M12.6 (alert said M9.9). Agreement or disagreement here says more about the relation's coefficients than about the event — supply the operational relation to test it."
+    },
+    {
+      "code": "D3",
+      "status": "FLAG",
+      "message": "magnitude computed at 56.620°N 164.130°E 140 km, intensity predicted from 48.200°N 153.400°E 140 km: 1183 km apart. A magnitude inflated by a far hypocentre was then applied to a near one — the errors compound."
+    },
+    {
+      "code": "D5",
+      "status": "FLAG",
+      "message": "M9.9 > Mw 9.5 (Chile 1960, largest instrumentally recorded). JMA introduced a seismologically plausible M ceiling after 2016-08-01; ask what its value is and whether it applies on this code path."
+    },
+    {
+      "code": "D5",
+      "status": "FLAG",
+      "message": "if the alert were right, the network would have recorded ≈10^3.3 = 1,901× the ground motion the real M6.9 event produces at the same stations (differential, eew_illustrative)."
+    },
+    {
+      "code": "D6",
+      "status": "FLAG",
+      "message": "prediction from the alert's inputs minus observed intensity: median +4.7 units (observed max 0)."
+    },
+    {
+      "code": "D6",
+      "status": "INFO",
+      "message": "the same intensity model fed the correct M/location misses observed by -1.0 — the intensity stage is faithful; the fault is upstream in M/location."
+    },
+    {
+      "code": "D6",
+      "status": "INFO",
+      "message": "All stations are beyond Si & Midorikawa's ~300 km calibration range; predictions are extrapolations."
+    },
+    {
+      "code": "D7",
+      "status": "PASS",
+      "message": "no single station moves M by >0.5 or the location by >144 km (largest: WAKKANAI, 55 km)."
+    },
+    {
+      "code": "D8",
+      "status": "PASS",
+      "message": "all picks within ±2.0 s of the independent solution."
+    }
+  ],
+  "early_solutions": [
+    {
+      "n": 3,
+      "hypo": {
+        "lat": 52.1104,
+        "lon": 155.8929,
+        "depth_km": 0.0,
+        "time": "2026-10-16T03:35:32.707541+00:00"
+      },
+      "region_km": 1350.3800759565777,
+      "permits": [
+        "alert (magnitude)"
+      ]
+    },
+    {
+      "n": 4,
+      "hypo": {
+        "lat": 52.6704,
+        "lon": 156.8329,
+        "depth_km": 0.0,
+        "time": "2026-10-16T03:35:21.753677+00:00"
+      },
+      "region_km": 1268.7755784180194,
+      "permits": [
+        "alert (magnitude)"
+      ]
+    },
+    {
+      "n": 5,
+      "hypo": {
+        "lat": 48.8904,
+        "lon": 151.3329,
+        "depth_km": 35.0,
+        "time": "2026-10-16T03:36:35.522058+00:00"
+      },
+      "region_km": 1356.850324711215,
+      "permits": []
+    },
+    {
+      "n": 8,
+      "hypo": {
+        "lat": 50.4304,
+        "lon": 153.4329,
+        "depth_km": 120.0,
+        "time": "2026-10-16T03:36:08.063644+00:00"
+      },
+      "region_km": 1024.886205900598,
+      "permits": []
+    }
+  ],
+  "D2": [
+    {
+      "hypo": "independent",
+      "stations_within_cutoff": 0,
+      "nearest_R_km": 1289.2193025206645,
+      "M_with_cutoff": null,
+      "M_no_cutoff": 10.595624768557556
+    },
+    {
+      "hypo": "reference",
+      "stations_within_cutoff": 0,
+      "nearest_R_km": 1265.9464234667805,
+      "M_with_cutoff": null,
+      "M_no_cutoff": 10.51903360232816
+    },
+    {
+      "hypo": "alert (magnitude)",
+      "stations_within_cutoff": 0,
+      "nearest_R_km": 1934.4007969388397,
+      "M_with_cutoff": null,
+      "M_no_cutoff": 12.605355425919118
+    },
+    {
+      "hypo": "alert (intensity)",
+      "stations_within_cutoff": 0,
+      "nearest_R_km": 796.9223970532153,
+      "M_with_cutoff": null,
+      "M_no_cutoff": 8.983657462774364
+    }
+  ],
+  "D7": [
+    {
+      "station": "WAKKANAI",
+      "dM": 0.006157559077520247,
+      "dx_km": 54.91131803497632
+    },
+    {
+      "station": "NEMURO",
+      "dM": 0.006157559077520247,
+      "dx_km": 1.305185617058516
+    },
+    {
+      "station": "NAKASHIBETSU",
+      "dM": 0.006157559077520247,
+      "dx_km": 1.305185617058516
+    },
+    {
+      "station": "ASAHIKAWA",
+      "dM": 0.006157559077520247,
+      "dx_km": 1.305185617058516
+    },
+    {
+      "station": "HAKODATE",
+      "dM": 0.006157559077520247,
+      "dx_km": 1.305185617058516
+    }
+  ],
+  "summary": [
+    "Out-of-network event: location under-determined along the back-azimuth (relation-independent).",
+    "Magnitude used stations beyond the 700 km safeguard (relation-independent).",
+    "Magnitude and intensity stages used different hypocentres (relation-independent).",
+    "Intensity over-prediction follows from the M/location inputs; the intensity model itself behaves."
+  ]
+}

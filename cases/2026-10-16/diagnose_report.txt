@@ -1,0 +1,80 @@
+Stations: 28   P-time reference: 2026-10-16 12:38:08.2 JST
+Relation: eew_illustrative: log10A = 0.72·M -1.2·log10R -0.002·R +1.69 [R=hypo, A µm, calibrated to 700 km]
+          ILLUSTRATIVE coefficients — shape only, not an agency's formula.
+Travel times: IASP91 (TauP)
+Alert: M9.9  intensity hypocentre 48.200°N 153.400°E 140 km  magnitude hypocentre 56.620°N 164.130°E 140 km
+
+Independent location from P picks
+─────────────────────────────────
+  52.080°N 157.623°E 115 km  origin 2026-10-16 12:35:27.0 JST  mean |residual| 0.23 s
+  near-best region spans 480 km, elongated along bearing 46°/226°
+  reference catalogue: 51.985°N 157.270°E 135 km → independent solution is 26 km from it
+  magnitude: not computed — nearest station 1284 km is beyond eew_illustrative's calibrated 700 km. Use the catalogue/teleseismic Mw for this event.
+
+D1 · Location — do the picks support the alert's hypocentres?
+─────────────────────────────────────────────────────────────
+  independent          52.080°N 157.623°E 115 km      mean|res| (free t0)   0.23 s   (stated t0)    0.23 s
+  reference            51.985°N 157.270°E 135 km      mean|res| (free t0)   0.25 s   (stated t0)    0.29 s
+  alert (intensity)    48.200°N 153.400°E 140 km      mean|res| (free t0)   1.95 s
+  alert (magnitude)    56.620°N 164.130°E 140 km      mean|res| (free t0)   4.39 s
+  [D1] ⚑ FLAG  alert (intensity): 526 km away; the FULL pick set rejects it (1.95 s vs 0.23 s). An alert computed from only the earliest picks can still land there — see below.
+  [D1] ⚑ FLAG  alert (magnitude): 657 km away; the FULL pick set rejects it (4.39 s vs 0.23 s). An alert computed from only the earliest picks can still land there — see below.
+
+  Early solutions (first N picks only — the information an EEW system has when it decides):
+    N=3: best 52.110°N 155.893°E 0 km  (118 km from full solution); near-best region 1350 km; ALSO FITS alert (magnitude)
+    N=4: best 52.670°N 156.833°E 0 km  (85 km from full solution); near-best region 1269 km; ALSO FITS alert (magnitude)
+    N=5: best 48.890°N 151.333°E 35 km  (569 km from full solution); near-best region 1357 km
+    N=8: best 50.430°N 153.433°E 120 km  (344 km from full solution); near-best region 1025 km
+  [D1] ⚑ FLAG  With the first 4 pick(s) the alert's hypocentre is as compatible with the data as the true one: an early-stage EEW solution could legitimately land there. Mislocation is explained by geometry; the failure is that nothing downstream caught it.
+
+D4 · Geometry — was the event inside the network?
+─────────────────────────────────────────────────
+  [D4] ⚑ FLAG  azimuthal gap 339°, nearest station 1284 km, stations lie toward bearing 230°. OUT-OF-NETWORK: distance along the back-azimuth trades off against origin time; relations calibrated on in-network events are being extrapolated.
+
+D2 · Distance cutoff (700 km from the hypocentre) — relation-independent part
+─────────────────────────────────────────────────────────────────────────────
+  independent          stations ≤700 km:   0   nearest   1289 km   M(cutoff) —  no estimate   M(no cutoff)* 10.6
+  reference            stations ≤700 km:   0   nearest   1266 km   M(cutoff) —  no estimate   M(no cutoff)* 10.5
+  alert (magnitude)    stations ≤700 km:   0   nearest   1934 km   M(cutoff) —  no estimate   M(no cutoff)* 12.6
+  alert (intensity)    stations ≤700 km:   0   nearest    797 km   M(cutoff) —  no estimate   M(no cutoff)*  9.0
+  * relation-dependent; shown to illustrate extrapolation, not as an estimate of the event
+  [D2] ⚑ FLAG  No station lies within 700 km of the alert's magnitude hypocentre (nearest 1934 km). With the cutoff working, NO magnitude could have been computed and no warning issued. The published M can only have come from stations the cutoff should have excluded — the safeguard was not applied.
+  [D2] · info  [relation-dependent] at 1929 km, eew_illustrative gives ∂M/∂R = 0.32 per 100 km of distance error. Every 100 km the hypocentre is pushed away adds that much to M; at 700 km the same relation gives 0.38/100 km.
+  [D2] · info  [relation-dependent] eew_illustrative at the alert's magnitude hypocentre with no cutoff → M12.6 (alert said M9.9). Agreement or disagreement here says more about the relation's coefficients than about the event — supply the operational relation to test it.
+
+D3 · Stage consistency — same hypocentre for magnitude and intensity?
+─────────────────────────────────────────────────────────────────────
+  [D3] ⚑ FLAG  magnitude computed at 56.620°N 164.130°E 140 km, intensity predicted from 48.200°N 153.400°E 140 km: 1183 km apart. A magnitude inflated by a far hypocentre was then applied to a near one — the errors compound.
+
+D5 · Magnitude plausibility
+───────────────────────────
+  [D5] ⚑ FLAG  M9.9 > Mw 9.5 (Chile 1960, largest instrumentally recorded). JMA introduced a seismologically plausible M ceiling after 2016-08-01; ask what its value is and whether it applies on this code path.
+  [D5] ⚑ FLAG  if the alert were right, the network would have recorded ≈10^3.3 = 1,901× the ground motion the real M6.9 event produces at the same stations (differential, eew_illustrative).
+
+D6 · Intensity — predicted vs observed shindo (Si & Midorikawa 1999)
+────────────────────────────────────────────────────────────────────
+  M9.9 at 48.200°N 153.400°E 140 km, point source:  max 4 (I=3.6); 0/28 stations ≥ 5-
+  M9.9 at 48.200°N 153.400°E 140 km, finite (L≈1,259 km): max 7 (I=6.9) at RAUSU; 16/28 stations ≥ 5-
+  (compare with the agency's published predicted ranges; a match means the intensity stage did its job on bad inputs)
+  using M6.9 at 51.985°N 157.270°E 135 km: predicted max 0 (I=-1.0)
+  [D6] ⚑ FLAG  prediction from the alert's inputs minus observed intensity: median +4.7 units (observed max 0).
+  [D6] · info  the same intensity model fed the correct M/location misses observed by -1.0 — the intensity stage is faithful; the fault is upstream in M/location.
+  [D6] · info  All stations are beyond Si & Midorikawa's ~300 km calibration range; predictions are extrapolations.
+
+D7 · Single-sensor control (leave-one-out)
+──────────────────────────────────────────
+  [D7] ✓ pass  no single station moves M by >0.5 or the location by >144 km (largest: WAKKANAI, 55 km).
+
+D8 · Outlier picks
+──────────────────
+  [D8] ✓ pass  all picks within ±2.0 s of the independent solution.
+
+Summary — failure classes supported by the data
+───────────────────────────────────────────────
+  • Out-of-network event: location under-determined along the back-azimuth (relation-independent).
+  • Magnitude used stations beyond the 700 km safeguard (relation-independent).
+  • Magnitude and intensity stages used different hypocentres (relation-independent).
+  • Intensity over-prediction follows from the M/location inputs; the intensity model itself behaves.
+
+  Not determinable from station data alone: whether a safeguard failed through a code regression,
+  a configuration change, or an unauthorised modification. That needs the agency's change history.

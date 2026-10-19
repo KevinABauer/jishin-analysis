@@ -1,0 +1,148 @@
+{
+  "alert": {
+    "source": "JMA",
+    "event_id": "",
+    "serial": 17,
+    "info_type": "発表",
+    "issued_at": "2026-10-16T03:40:02.600000+00:00",
+    "detected_at": "2026-10-16T03:38:10.100000+00:00",
+    "origin_time": null,
+    "magnitude": 9.9,
+    "region": "千島列島",
+    "message_digest": "",
+    "notes": [
+      "serial/issue/detection time, hypocentre 48.2N 153.4E 140 km and M9.9 are as published on JMA's 緊急地震速報(警報)発表状況 page for this event",
+      "hypocenter_magnitude is a RECONSTRUCTION: JMA stated M was computed ~680 km farther from Japan than the true source; exact coordinates not published"
+    ],
+    "hypocenter": {
+      "lat": 48.2,
+      "lon": 153.4,
+      "depth_km": 140.0
+    },
+    "hypocenter_magnitude": {
+      "lat": 56.62,
+      "lon": 164.13,
+      "depth_km": 140.0
+    }
+  },
+  "authority_record": {
+    "source": "JMA",
+    "event_id": "",
+    "serial": 17,
+    "info_type": "",
+    "issued_at": "2026-10-16T03:40:02.600000+00:00",
+    "detected_at": "2026-10-16T03:38:10.100000+00:00",
+    "origin_time": null,
+    "magnitude": 9.9,
+    "region": "千島列島",
+    "message_digest": "",
+    "notes": [
+      "transcribed from JMA's published EEW record for 2026-10-16 (serial 17)"
+    ],
+    "hypocenter": {
+      "lat": 48.2,
+      "lon": 153.4,
+      "depth_km": 140.0
+    },
+    "hypocenter_magnitude": null
+  },
+  "checks": [
+    {
+      "code": "A2",
+      "status": "PASS",
+      "message": "Alert matches the agency record (M9.9, 48.200°N 153.400°E 140 km, issued 2026-10-16 12:40:02.6 JST). The agency itself published this content."
+    },
+    {
+      "code": "B1",
+      "status": "INFO",
+      "message": "400 receipts spanning 1315 km; carriers ['au', 'rakuten', 'softbank']; channels ['cbs', 'jalert', 'tv']; 90 % of receipts within 3.0 s."
+    },
+    {
+      "code": "B3",
+      "status": "PASS",
+      "message": "NATIONAL pattern (1315 km extent, 3 independent carriers, non-cellular channels ['jalert', 'tv']). A radio-layer spoof cannot produce this: it would need simultaneous rogue cells on every carrier across hundreds of km, plus control of broadcast TV/J-ALERT. The common point is upstream of the carriers."
+    },
+    {
+      "code": "C1",
+      "status": "INFO",
+      "message": "Independent catalogue: M6.9 mww — 76 km NE of Ozernovskiy, Russia — 51.985°N 157.270°E 135 km at 2026-10-16 12:35:31.0 JST (fixture-kamchatka-20261016)."
+    },
+    {
+      "code": "C2",
+      "status": "FLAG",
+      "message": "Alert parameters disagree with the real event: epicentre 503 km away, ΔM = +3.0 (≈31,623× the energy). The event is real; the alert's description of it is not."
+    },
+    {
+      "code": "C3",
+      "status": "FLAG",
+      "message": "M9.9 exceeds the largest instrumentally recorded earthquake (Chile 1960, Mw 9.5). Physically possible in principle, but as a prior it marks an estimator operating outside its envelope."
+    },
+    {
+      "code": "C4",
+      "status": "PASS",
+      "message": "Agency detection 2026-10-16 12:38:10.1 JST vs. real event's P wave first reaching the network (Shiretoko/Rausu, 1259 km, 157.6 s travel) at 2026-10-16 12:38:08.6 JST: lag +1.5 s. The trigger WAS that earthquake's P wave."
+    }
+  ],
+  "footprint": {
+    "receipts": 400,
+    "extent_km": 1315.1656256258382,
+    "carriers": [
+      "au",
+      "rakuten",
+      "softbank"
+    ],
+    "channels": [
+      "cbs",
+      "jalert",
+      "tv"
+    ],
+    "distinct_digests": 1,
+    "t_spread_p5_p95_s": 3.024835
+  },
+  "catalog_event": {
+    "id": "fixture-kamchatka-20261016",
+    "mag": 6.9,
+    "magType": "mww",
+    "place": "76 km NE of Ozernovskiy, Russia",
+    "time": "2026-10-16T03:35:31+00:00",
+    "hypo": {
+      "lat": 51.985,
+      "lon": 157.27,
+      "depth_km": 135.0,
+      "time": "2026-10-16T03:35:31+00:00"
+    }
+  },
+  "discrepancy": {
+    "epicentre_sep_km": 503.1773311381991,
+    "dM": 3.0,
+    "energy_ratio": 31622.776601683792
+  },
+  "timing": {
+    "first_point": "Shiretoko/Rausu",
+    "distance_km": 1258.727669946257,
+    "p_travel_s": 157.6483292737157,
+    "predicted_first_p": "2026-10-16T03:38:08.648329+00:00",
+    "agency_detected": "2026-10-16T03:38:10.100000+00:00",
+    "lag_s": 1.451671
+  },
+  "verdict": {
+    "verdict": "AUTHENTIC UPSTREAM ALERT, WRONG CONTENT — processing-fault class",
+    "because": [
+      "a real earthquake occurred",
+      "the alert describes it wrongly",
+      "the agency's trigger time equals that earthquake's P arrival",
+      "the agency's own record carries the same content",
+      "distribution pattern is upstream/national, not radio-layer"
+    ],
+    "would_change_if": [
+      "evidence the estimator's inputs (station data, telemetry) were tampered with — which needs station-level data; run eew_diagnose.py",
+      "unexplained changes to the EEW software/configuration before the event (change-management logs)"
+    ],
+    "axes": {
+      "authority": "MATCH",
+      "footprint": "NATIONAL",
+      "physics": "REAL_EVENT_WRONG_PARAMETERS",
+      "timing": "CONSISTENT"
+    }
+  }
+}

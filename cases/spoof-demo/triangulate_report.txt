@@ -1,0 +1,23 @@
+Alert: received-handset 東京湾 M8.1 at 35.500°N 139.900°E 30 km — issued 2026-10-20 18:15:00.0 JST (serial None, detected —)
+
+A · Authority — does the agency's own record contain this alert?
+────────────────────────────────────────────────────────────────
+  [A0] – n/a   No authoritative record supplied (--authority). JMA publishes EEW (warning) content on its 緊急地震速報(警報)発表状況 pages and in 防災情報XML (VXSE43).
+
+B · Footprint — what does the distribution pattern say about the origin?
+────────────────────────────────────────────────────────────────────────
+  [B1] · info  60 receipts spanning 3 km; carriers ['docomo']; channels ['cbs']; 90 % of receipts within 3.6 s.
+  [B3] ⚑ FLAG  LOCAL pattern: 3.3 km, single carrier, cell broadcast only. Consistent with a rogue base station (fake eNB/gNB) broadcasting ETWS/CMAS.
+  [B4] · info  Cell IDs reported: ['440-10-99999-1']. IDs absent from the carrier's own cell list are a strong fake-cell indicator.
+  [B5] · info  Transmitter estimate 35.65942°N 139.70051°E, 95 % region radius ≈ 0.03 km (path-loss exponent 3.21, fit RMS 4.4 dB, 60 receipts).
+
+C · Physics — is there a real earthquake behind the alert?
+──────────────────────────────────────────────────────────
+  [C1] ⚑ FLAG  No M≥4 event in the independent catalogue within −20/+10 min. Either nothing happened (sensor/telemetry glitch, or fabrication), or the catalogue lags — re-query later.
+
+Verdict
+───────
+  LOCAL RADIO-LAYER INJECTION — candidate
+    because: receipts confined to a small area on one carrier, cell broadcast only
+    would change if: the agency record contains the same alert
+    would change if: receipts from other carriers/channels or regions

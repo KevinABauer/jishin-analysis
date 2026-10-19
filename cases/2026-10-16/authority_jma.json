@@ -1,0 +1,16 @@
+{
+  "source": "JMA",
+  "serial": 17,
+  "issued_at": "2026-10-16T12:40:02.6+09:00",
+  "detected_at": "2026-10-16T12:38:10.1+09:00",
+  "magnitude": 9.9,
+  "hypocenter": {
+    "lat": 48.2,
+    "lon": 153.4,
+    "depth_km": 140
+  },
+  "region": "千島列島",
+  "notes": [
+    "transcribed from JMA's published EEW record for 2026-10-16 (serial 17)"
+  ]
+}

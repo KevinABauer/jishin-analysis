@@ -1,0 +1,1 @@
+true transmitter 35.6595 139.7005 (path-loss n=3.1, 4 dB noise)

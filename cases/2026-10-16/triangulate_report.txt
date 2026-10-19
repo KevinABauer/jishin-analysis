@@ -1,0 +1,28 @@
+Alert: JMA 千島列島 M9.9 at 48.200°N 153.400°E 140 km — issued 2026-10-16 12:40:02.6 JST (serial 17, detected 2026-10-16 12:38:10.1 JST)
+
+A · Authority — does the agency's own record contain this alert?
+────────────────────────────────────────────────────────────────
+  [A2] ✓ pass  Alert matches the agency record (M9.9, 48.200°N 153.400°E 140 km, issued 2026-10-16 12:40:02.6 JST). The agency itself published this content.
+
+B · Footprint — what does the distribution pattern say about the origin?
+────────────────────────────────────────────────────────────────────────
+  [B1] · info  400 receipts spanning 1315 km; carriers ['au', 'rakuten', 'softbank']; channels ['cbs', 'jalert', 'tv']; 90 % of receipts within 3.0 s.
+  [B3] ✓ pass  NATIONAL pattern (1315 km extent, 3 independent carriers, non-cellular channels ['jalert', 'tv']). A radio-layer spoof cannot produce this: it would need simultaneous rogue cells on every carrier across hundreds of km, plus control of broadcast TV/J-ALERT. The common point is upstream of the carriers.
+
+C · Physics — is there a real earthquake behind the alert?
+──────────────────────────────────────────────────────────
+  [C1] · info  Independent catalogue: M6.9 mww — 76 km NE of Ozernovskiy, Russia — 51.985°N 157.270°E 135 km at 2026-10-16 12:35:31.0 JST (fixture-kamchatka-20261016).
+  [C2] ⚑ FLAG  Alert parameters disagree with the real event: epicentre 503 km away, ΔM = +3.0 (≈31,623× the energy). The event is real; the alert's description of it is not.
+  [C3] ⚑ FLAG  M9.9 exceeds the largest instrumentally recorded earthquake (Chile 1960, Mw 9.5). Physically possible in principle, but as a prior it marks an estimator operating outside its envelope.
+  [C4] ✓ pass  Agency detection 2026-10-16 12:38:10.1 JST vs. real event's P wave first reaching the network (Shiretoko/Rausu, 1259 km, 157.6 s travel) at 2026-10-16 12:38:08.6 JST: lag +1.5 s. The trigger WAS that earthquake's P wave.
+
+Verdict
+───────
+  AUTHENTIC UPSTREAM ALERT, WRONG CONTENT — processing-fault class
+    because: a real earthquake occurred
+    because: the alert describes it wrongly
+    because: the agency's trigger time equals that earthquake's P arrival
+    because: the agency's own record carries the same content
+    because: distribution pattern is upstream/national, not radio-layer
+    would change if: evidence the estimator's inputs (station data, telemetry) were tampered with — which needs station-level data; run eew_diagnose.py
+    would change if: unexplained changes to the EEW software/configuration before the event (change-management logs)

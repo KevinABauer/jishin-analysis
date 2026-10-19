@@ -1,0 +1,14 @@
+{
+  "source": "received-handset",
+  "issued_at": "2026-10-20T09:15:00Z",
+  "magnitude": 8.1,
+  "region": "東京湾",
+  "hypocenter": {
+    "lat": 35.5,
+    "lon": 139.9,
+    "depth_km": 30
+  },
+  "notes": [
+    "fabricated demo alert"
+  ]
+}

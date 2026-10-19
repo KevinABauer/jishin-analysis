@@ -1,0 +1,23 @@
+{
+  "source": "JMA",
+  "serial": 17,
+  "info_type": "発表",
+  "region": "千島列島",
+  "issued_at": "2026-10-16T12:40:02.6+09:00",
+  "detected_at": "2026-10-16T12:38:10.1+09:00",
+  "magnitude": 9.9,
+  "hypocenter": {
+    "lat": 48.2,
+    "lon": 153.4,
+    "depth_km": 140
+  },
+  "hypocenter_magnitude": {
+    "lat": 56.62,
+    "lon": 164.13,
+    "depth_km": 140
+  },
+  "notes": [
+    "serial/issue/detection time, hypocentre 48.2N 153.4E 140 km and M9.9 are as published on JMA's 緊急地震速報(警報)発表状況 page for this event",
+    "hypocenter_magnitude is a RECONSTRUCTION: JMA stated M was computed ~680 km farther from Japan than the true source; exact coordinates not published"
+  ]
+}
