@@ -147,7 +147,7 @@ def multilaterate_rssi(rows, rep: L.Report):
     return res
 
 
-def check_footprint(rows, rep: L.Report) -> str:
+def check_footprint(rows, rep: L.Report, min_local: int = 10) -> str:
     rep.h("B ・ 受信範囲 ― 届き方から見た発信元")
     if not rows:
         rep.flag("B0", "N/A", "受信記録が指定されていません（--receipts）。")
@@ -162,7 +162,8 @@ def check_footprint(rows, rep: L.Report) -> str:
     ts = sorted(r["t"] for r in rows if r["t"])
     spread = (ts[int(0.95 * (len(ts) - 1))] - ts[int(0.05 * (len(ts) - 1))]).total_seconds() if len(ts) > 2 else 0.0
     rep.data["footprint"] = {"receipts": len(rows), "extent_km": extent, "carriers": carriers,
-                             "channels": channels, "distinct_digests": len(digests), "t_spread_p5_p95_s": spread}
+                             "channels": channels, "distinct_digests": len(digests), "t_spread_p5_p95_s": spread,
+                             "min_local_receipts": min_local}
     ca = "、".join(CA_JA.get(c, c) for c in carriers) or "－"
     ch = "、".join(CH_JA.get(c, c) for c in channels)
     rep.flag("B1", "INFO", f"受信記録 {len(rows)} 件、広がり {extent:.0f}km。事業者: {ca}。経路: {ch}。"
@@ -170,6 +171,9 @@ def check_footprint(rows, rep: L.Report) -> str:
     if len(digests) > 1:
         rep.flag("B2", "FLAG", f"本文が {len(digests)} 種類出回っています。配信のどこかで内容が分かれています。"
                  "それぞれを発表機関の文面と照合してください。")
+    # 判定はあえて非対称にしている。「広い」ことは積極的な証拠で、少数の受信記録でも示せる。
+    # 「狭い」ことは広がりがないというだけで、標本が少なければ必ず狭く見える。
+    # そのため局所型の判定には一定数以上の受信記録を求める。
     non_cbs = [c for c in channels if c not in ("cbs", "")]
     if extent >= 150 or (len(carriers) >= 2 and extent >= 50) or non_cbs:
         why = []
@@ -181,8 +185,13 @@ def check_footprint(rows, rep: L.Report) -> str:
                  "です。共通の発信点は各事業者より上流にあります。")
         return "NATIONAL"
     if extent <= 30 and len(carriers) <= 1 and set(channels) <= {"cbs"}:
-        rep.flag("B3", "FLAG", f"局所型の届き方です（{extent:.1f}km、単一事業者、エリアメール等のみ）。"
-                 "偽基地局（偽の eNB／gNB）による ETWS の送信と矛盾しません。")
+        if len(rows) < min_local:
+            rep.flag("B3", "INFO", f"受信記録が {len(rows)} 件しかなく、互いに近接しています。局所型と判定するには "
+                     f"{min_local} 件以上が必要です（--min-local-receipts）。標本が少なければ、どんな届き方も局所的に"
+                     "見えます。近くにいた他事業者の利用者で「受信しなかった」人の記録も含め、追加で集めてください。")
+            return "INDETERMINATE"
+        rep.flag("B3", "FLAG", f"局所型の届き方です（受信記録 {len(rows)} 件が {extent:.1f}km 以内、単一事業者、"
+                 "エリアメール等のみ）。偽基地局（偽の eNB／gNB）による ETWS の送信と矛盾しません。")
         cells = sorted({r["cell"] for r in rows if r["cell"]})
         if cells:
             rep.flag("B4", "INFO", f"報告されたセルID: {cells[:12]}{' …' if len(cells) > 12 else ''}。"
@@ -245,22 +254,36 @@ def check_physics(alert: L.Alert, geo: dict | None, points, tt: L.TravelTimes, r
     rep.flag("C1", "INFO", f"独立カタログ: M{ev['mag']}（{ev['magType'] or '－'}）{ev['place']}、"
              f"{ev['hypo']}、発生 {L.fmt_time(ev['time'])}（{ev['id']}）。")
 
-    physics = "CONSISTENT"
-    if alert.magnitude is not None and alert.h_int:
+    # 速報が実際に持っている要素だけを比べる。何も比べられなければ NOT_CHECKED で、「整合」とはしない。
+    physics, compared, disagree, disc = "NOT_CHECKED", [], [], {}
+    if alert.magnitude is not None and ev["mag"] is not None:
+        dM = alert.magnitude - ev["mag"]
+        disc |= {"dM": dM, "energy_ratio": 10 ** (1.5 * dM)}
+        compared.append("magnitude")
+        if abs(dM) >= 1.0:
+            disagree.append(f"マグニチュードの差は {dM:+.1f}（エネルギーにして約 {10 ** (1.5 * dM):,.0f} 倍）")
+    if alert.h_int:
         sep = float(L.gc_km(alert.h_int.lat, alert.h_int.lon, ev["hypo"].lat, ev["hypo"].lon))
-        dM = alert.magnitude - (ev["mag"] or 0)
-        energy = 10 ** (1.5 * dM)
-        rep.data["discrepancy"] = {"epicentre_sep_km": sep, "dM": dM, "energy_ratio": energy}
-        if sep > 100 or abs(dM) >= 1.0:
-            physics = "REAL_EVENT_WRONG_PARAMETERS"
-            rep.flag("C2", "FLAG", f"速報の震源要素が実際の地震と食い違います。震央は {sep:.0f}km 離れ、"
-                     f"マグニチュードは {dM:+.1f}（エネルギーにして約 {energy:,.0f} 倍）。地震そのものは本物ですが、"
-                     "速報はその地震を正しく表していません。")
-        else:
-            rep.flag("C2", "PASS", f"速報の震源要素はカタログと {sep:.0f}km・M差 {dM:+.1f} 以内で一致します。")
-        if alert.magnitude >= 9.6:
-            rep.flag("C3", "FLAG", f"M{alert.magnitude} は観測史上最大の地震（1960年チリ地震、Mw 9.5）を上回ります。"
-                     "原理的にあり得ないとは言えませんが、事前の見込みとしては、推定処理が想定外の領域で動いていたことを示します。")
+        disc["epicentre_sep_km"] = sep
+        compared.append("location")
+        if sep > 100:
+            disagree.append(f"震央は {sep:.0f}km 離れています")
+    rep.data["discrepancy"] = disc | {"compared": compared}
+    names = {"magnitude": "マグニチュード", "location": "震源"}
+    if disagree:
+        physics = "REAL_EVENT_WRONG_PARAMETERS"
+        rep.flag("C2", "FLAG", "速報の震源要素が実際の地震と食い違います。" + "、".join(disagree) + "。"
+                 "地震そのものは本物ですが、速報はその地震を正しく表していません。")
+    elif compared:
+        physics = "CONSISTENT"
+        missing = [names[k] for k in ("magnitude", "location") if k not in compared]
+        rep.flag("C2", "PASS", f"{'と'.join(names[k] for k in compared)}はカタログと一致します"
+                 + (f"（速報に{missing[0]}がないため、そちらは未確認）" if missing else "") + "。")
+    else:
+        rep.flag("C2", "N/A", "速報にマグニチュードも震源もなく、比べられるものがありません。")
+    if alert.magnitude is not None and alert.magnitude >= 9.6:
+        rep.flag("C3", "FLAG", f"M{alert.magnitude} は観測史上最大の地震（1960年チリ地震、Mw 9.5）を上回ります。"
+                 "原理的にあり得ないとは言えませんが、事前の見込みとしては、推定処理が想定外の領域で動いていたことを示します。")
 
     timing = "NOT_CHECKED"
     if alert.detected_at:
@@ -282,19 +305,30 @@ def check_physics(alert: L.Alert, geo: dict | None, points, tt: L.TravelTimes, r
 
 
 # -------------------------------------------------------------------- 総合判定
-def verdict(auth, foot, phys, timing, rep: L.Report):
+VERDICTS = {
+    "LOCAL_INJECTION": "無線区間での局所的な注入（偽基地局）の疑い",
+    "DISTRIBUTION_ALTERED": "配信途中で内容が改変された疑い（発表機関から受信者までの経路を調査）",
+    "PROCESSING_FAULT": "発表機関から出た本物の速報で、内容が誤り ― 処理不具合の類型",
+    "UPSTREAM_FALSE_TRIGGER": "上流での誤検知（実際の地震なし）― センサー・伝送の不具合、または上流での侵害",
+    "CONSISTENT": "整合した速報 ― 確認した範囲では異常は見つかりません",
+    "INDETERMINATE": "判定保留 ― 与えられた材料では結論を出せません",
+}
+AXIS_JA = {"authority": "発表元", "footprint": "受信範囲", "physics": "物理", "timing": "時刻"}
+
+
+def verdict(auth, foot, phys, timing, rep: L.Report, compared=()):
     rep.h("総合判定")
-    v, why, overturn = "判定保留", [], []
+    code, why, overturn = "INDETERMINATE", [], []
     if foot == "LOCAL" and auth in ("ABSENT", "MISMATCH", "NOT_CHECKED"):
-        v = "無線区間での局所的な注入（偽基地局）の疑い"
-        why = ["受信が狭い範囲・単一事業者・エリアメール等のみに限られている"]
+        code = "LOCAL_INJECTION"
+        why = ["十分な数の受信記録が、狭い範囲・単一事業者・エリアメール等のみに限られている"]
         overturn = ["発表機関の記録に同じ速報がある", "他の事業者・経路・地域での受信記録が見つかる"]
-    elif auth == "MISMATCH" and foot in ("NATIONAL", "NOT_CHECKED"):
-        v = "配信途中で内容が改変された疑い（発表機関から受信者までの経路を調査）"
+    elif auth == "MISMATCH" and foot in ("NATIONAL", "NOT_CHECKED", "INDETERMINATE"):
+        code = "DISTRIBUTION_ALTERED"
         why = ["受信した内容が、発表機関の公開内容と異なる"]
         overturn = ["差異が受信側の書き写しの誤りにすぎない"]
     elif auth in ("MATCH", "NOT_CHECKED") and phys == "REAL_EVENT_WRONG_PARAMETERS" and timing in ("CONSISTENT", "NOT_CHECKED"):
-        v = "発表機関から出た本物の速報で、内容が誤り ― 処理不具合の類型"
+        code = "PROCESSING_FAULT"
         why = ["実際に地震が起きている", "速報はその地震を誤って表している"]
         if timing == "CONSISTENT": why.append("機関の検知時刻が、その地震の P 波到達時刻と一致する")
         if auth == "MATCH": why.append("発表機関自身の記録に同じ内容がある")
@@ -303,52 +337,69 @@ def verdict(auth, foot, phys, timing, rep: L.Report):
                     "eew_diagnose.py を実行してください",
                     "地震前に緊急地震速報のソフトウェア・設定に説明のつかない変更があった（変更管理記録）"]
     elif phys == "NO_PHYSICAL_EVENT" and auth in ("MATCH", "NOT_CHECKED"):
-        v = "上流での誤検知（実際の地震なし）― センサー・伝送の不具合、または上流での侵害"
+        code = "UPSTREAM_FALSE_TRIGGER"
         why = ["発表機関が発表している", "独立カタログに対応する地震がない"]
         overturn = ["遅れてカタログに掲載される",
                     "観測点単位のデータで単一センサーの故障が確認される"
                     "（例: 2016年8月1日 富津観測点の電源部故障、2013年8月8日 海底地震計の時刻付与異常）"]
-    elif phys == "CONSISTENT":
-        v = "整合した速報 ― 異常は見つかりません"
-        why = ["震源要素が独立カタログと一致する"]
-    rep.p(f"  {v}")
+    elif phys == "CONSISTENT" and timing != "INCONSISTENT" and auth != "MISMATCH":
+        code = "CONSISTENT"
+        names = {"magnitude": "マグニチュード", "location": "震源"}
+        why = [f"{'と'.join(names[k] for k in compared) or '－'}が独立カタログと一致する"]
+        if "location" not in compared: overturn.append("速報の震源が分かり、それがカタログと食い違う")
+    else:
+        why = ["、".join(f"{AXIS_JA[k]}={v}" for k, v in
+                        {"authority": auth, "footprint": foot, "physics": phys, "timing": timing}.items())]
+        if timing == "INCONSISTENT":
+            why.append("機関の検知時刻が、カタログの地震の P 波到達時刻と合わない")
+        overturn = ["NOT_CHECKED／INDETERMINATE となっている観点について、材料を追加する"]
+    rep.p(f"  {VERDICTS[code]}")
     for w in why: rep.p(f"    根拠: {w}")
     for o in overturn: rep.p(f"    覆る条件: {o}")
-    rep.data["verdict"] = {"verdict": v, "because": why, "would_change_if": overturn,
+    rep.data["verdict"] = {"code": code, "verdict": VERDICTS[code], "because": why, "would_change_if": overturn,
                            "axes": {"authority": auth, "footprint": foot, "physics": phys, "timing": timing}}
 
 
-def main(argv=None):
-    L.setup_console()
+def build_parser() -> argparse.ArgumentParser:
     L.localize_argparse()
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--alert", required=True, help="受信した速報（正規化 JSON または気象庁XML）")
     ap.add_argument("--authority", nargs="*", default=[], help="発表機関の記録（気象庁XML または JSON、複数可）")
     ap.add_argument("--receipts", help="受信記録の CSV")
+    ap.add_argument("--min-local-receipts", type=int, default=10,
+                    help="局所型と判定するのに必要な受信記録の件数（既定 10）")
     ap.add_argument("--catalog", help="独立した地震カタログ（USGS GeoJSON）")
     ap.add_argument("--fetch-usgs", action="store_true", help="USGS の FDSN イベントサービスに照会する")
     ap.add_argument("--stations", help="観測点 CSV（観測点,緯度,経度）。省略時は日本の参照地点を使う")
     ap.add_argument("--json", help="機械可読の結果をこのファイルに書き出す")
-    a = ap.parse_args(argv)
+    return ap
 
+
+def main(argv=None):
+    L.setup_console()
+    a = build_parser().parse_args(argv)
     alert = L.load_alert(a.alert)
     rep = L.Report()
-    rep.p(f"速報: {alert.source} {alert.region} M{alert.magnitude}、{alert.h_int}"
+    rep.p(f"速報: {alert.source} {alert.region} M{alert.magnitude if alert.magnitude is not None else '不明'}、"
+          f"{alert.h_int or '震源なし'}"
           f"（{f'第{alert.serial}報、' if alert.serial is not None else ''}発表 {L.fmt_time(alert.issued_at)}、"
           f"地震波検知 {L.fmt_time(alert.detected_at)}）")
+    for n in alert.notes:
+        rep.p(f"  注記: {n}")
     rep.data["alert"] = alert.to_dict()
 
     auth = check_authority(alert, a.authority, rep)
-    foot = check_footprint(load_receipts(a.receipts) if a.receipts else [], rep)
+    foot = check_footprint(load_receipts(a.receipts) if a.receipts else [], rep, a.min_local_receipts)
     geo = json.loads(L.read_text(a.catalog)) if a.catalog else (fetch_usgs(alert) if a.fetch_usgs else None)
     points = L.load_points_csv(a.stations) if a.stations else L.JAPAN_REFERENCE_POINTS
     tt = L.TravelTimes()
     phys, timing = check_physics(alert, geo, points, tt, rep)
-    verdict(auth, foot, phys, timing, rep)
+    verdict(auth, foot, phys, timing, rep, rep.data.get("discrepancy", {}).get("compared", ()))
 
     sys.stdout.write(rep.text())
     if a.json:
         L.write_json(a.json, rep.data)
+    return rep.data
 
 
 if __name__ == "__main__":

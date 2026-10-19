@@ -32,7 +32,7 @@ STATIONS = {  # 名称: (緯度, 経度) ― おおよその位置、北海道�
     "水戸": (36.37, 140.47), "銚子": (35.73, 140.83), "東京": (35.68, 139.77), "長野": (36.65, 138.19),
 }
 
-TRUE = L.Hypo(51.985, 157.270, 135.0, datetime(2026, 10, 16, 3, 35, 31, tzinfo=timezone.utc), "USGS")
+TRUE = L.Hypo(51.985, 157.270, 135.0, datetime(2026, 10, 16, 3, 35, 31, 900000, tzinfo=timezone.utc), "USGS")
 M_TRUE = 6.9
 tt = L.TravelTimes()
 truth = L.RELATIONS["tsuboi"]

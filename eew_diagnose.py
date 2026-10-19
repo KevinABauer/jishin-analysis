@@ -43,6 +43,20 @@ N_IND, N_REF, N_INT, N_MAG = "独立解", "参照カタログ", "速報（震度
 
 
 # ===================================================================== データ
+def _log_amp(v, station):
+    """正の振幅の常用対数。0・負・解釈不能は NaN（マグニチュード計算から除外）。"""
+    if v in (None, ""):
+        return np.nan
+    try:
+        a = float(L.nfkc(v))
+    except ValueError:
+        a = float("nan")
+    if not (math.isfinite(a) and a > 0):
+        print(f"[読み取り値] {station}: 振幅 {v!r} は正の数ではないため、マグニチュード計算から除外します", file=sys.stderr)
+        return np.nan
+    return math.log10(a)
+
+
 class Picks:
     def __init__(self, rows):
         self.sta = [r["station"] for r in rows]
@@ -51,7 +65,7 @@ class Picks:
         t = [L.parse_time(r["p_time"]) for r in rows]
         self.t_ref = min(t)
         self.t = np.array([(x - self.t_ref).total_seconds() for x in t])
-        self.logA = np.array([math.log10(float(r["amp_um"])) if r.get("amp_um") not in (None, "") else np.nan for r in rows])
+        self.logA = np.array([_log_amp(r.get("amp_um"), r["station"]) for r in rows])
         self.obs_I = np.array([L.parse_shindo(r.get("observed_shindo", "")) for r in rows])
 
     def __len__(self):
@@ -148,23 +162,30 @@ def _ref_mag(ref):
 
 
 # ======================================================================== 解析
+D8_CAP_S = 10.0          # 外れ値のしきい値は、読み取り値がどれほどばらついてもこれ以上は広げない
+
+
 def analyse(p: Picks, alert: L.Alert, rel: L.AmpRelation, cutoff: float, tt: L.TravelTimes,
             reference: L.Hypo | None, fault_type: str, site_amp: float, rep: L.Report):
     W = 18
+    hM, hI, Ma = alert.h_mag, alert.h_int, alert.magnitude
     rep.p(f"観測点数: {len(p)}　P波時刻の基準: {L.fmt_time(p.t_ref)}")
     rep.p(f"関係式: {rel.describe()}")
     if rel.note:
         rep.p(f"　　　　{rel.note}")
     rep.p(f"走時: {'IASP91（TauP）' if tt.exact else '簡易モデル ― obspy を入れてください'}")
-    hM, hI = alert.h_mag, alert.h_int
-    rep.p(f"速報: M{alert.magnitude}　震度予測の震源 {hI}　M計算の震源 {hM}"
-          + ("（同じ）" if alert.hypocenter_magnitude is None else ""))
+    rep.p(f"速報: M{Ma if Ma is not None else '不明'}　震度予測の震源 {hI or '－（なし）'}　M計算の震源 {hM or '－'}"
+          + ("（同じ）" if hI and alert.hypocenter_magnitude is None else ""))
+    for n in alert.notes:
+        rep.p(f"  注記: {n}")
+    classes = []
 
     # ---- 独立解
     rep.h("P波の読み取り値による独立した震源決定")
     h, mis, reg_km, reg_az = locate(p, tt)
     rep.p(f"  {h}　発生 {L.fmt_time(h.time)}　平均残差 {mis:.2f} 秒")
-    rep.p(f"  候補域（残差が最良解に近い範囲）の広がり {reg_km:.0f}km" + (f"、方位 {reg_az:.0f}°／{reg_az+180:.0f}° 方向に細長い" if reg_az is not None else ""))
+    rep.p(f"  候補域（残差が最良解に近い範囲）の広がり {reg_km:.0f}km"
+          + (f"、方位 {reg_az:.0f}°／{reg_az+180:.0f}° 方向に細長い" if reg_az is not None else ""))
     gap = L.azimuthal_gap(h.lat, h.lon, p.lat, p.lon)
     dmin = float(L.gc_km(h.lat, h.lon, p.lat, p.lon).min())
     baz = float(np.median(L.bearing_deg(h.lat, h.lon, p.lat, p.lon)))
@@ -181,16 +202,14 @@ def analyse(p: Picks, alert: L.Alert, rel: L.AmpRelation, cutoff: float, tt: L.T
     else:
         Mdat = None
         rep.p(f"  マグニチュード: 計算しません。最寄り観測点 {dmin:.0f}km が {rel.name} の較正範囲 "
-              f"{rel.valid_max_km:.0f}km を超えています。この地震にはカタログ（遠地）の Mw を使ってください。")
+              f"{rel.valid_max_km:.0f}km を超えているか、使える振幅がありません。この地震にはカタログ（遠地）の Mw を使ってください。")
 
     # ---- D1 震源の誤決定
     rep.h("D1 ・ 震源 ― 読み取り値は速報の震源を支持するか")
     rows = [(N_IND, h)] + ([(N_REF, reference)] if reference else []) + \
-           [(N_INT, hI)] + ([(N_MAG, hM)] if alert.hypocenter_magnitude else [])
+           ([(N_INT, hI)] if hI else []) + ([(N_MAG, hM)] if alert.hypocenter_magnitude else [])
     base = None
     for name, hh in rows:
-        if hh is None:
-            continue
         r_free, _ = residuals(p, tt, hh, fixed_t0=False)
         mf = float(np.mean(np.abs(r_free)))
         base = base or mf
@@ -199,8 +218,10 @@ def analyse(p: Picks, alert: L.Alert, rel: L.AmpRelation, cutoff: float, tt: L.T
             r_fix, _ = residuals(p, tt, hh, fixed_t0=True)
             line += f"　（発生時刻固定）{float(np.mean(np.abs(r_fix))):7.2f} 秒"
         rep.p(line)
+    if not hI:
+        rep.flag("D1", "N/A", "速報に震源がないため、読み取り値と照合できません。")
     for name, hh in rows[1:]:
-        if hh is None or name == N_REF:
+        if name == N_REF:
             continue
         r_free, _ = residuals(p, tt, hh, fixed_t0=False)
         mf = float(np.mean(np.abs(r_free)))
@@ -215,7 +236,6 @@ def analyse(p: Picks, alert: L.Alert, rel: L.AmpRelation, cutoff: float, tt: L.T
             rep.flag("D1", "FLAG", f"{name}は {sep:.0f}km 離れており、全観測点の読み取り値はこれを支持しません"
                      f"（{mf:.2f} 秒 対 {base:.2f} 秒）。ただし最初の数観測点だけで決めた解なら、そこに落ちることはあり得ます（下記）。")
 
-    # 緊急地震速報は全観測点ではなく最初の数観測点で判断する。早い段階の解はどこに落ち得るか
     order = np.argsort(p.t)
     alert_h = [(n, x) for n, x in ((N_INT, hI), (N_MAG, hM if alert.hypocenter_magnitude else None))
                if x and float(L.gc_km(h.lat, h.lon, x.lat, x.lon)) > 30]
@@ -240,6 +260,7 @@ def analyse(p: Picks, alert: L.Alert, rel: L.AmpRelation, cutoff: float, tt: L.T
     rep.data["early_solutions"] = early
     if any(e["permits"] for e in early):
         nmax = max(e["n"] for e in early if e["permits"])
+        classes.append("EARLY_SOLUTION_AMBIGUOUS")
         rep.flag("D1", "FLAG", f"最初の {nmax} 観測点までの情報では、速報の震源は真の震源と同じくらいデータに合います。"
                  "早い段階の速報の解がそこに落ちることは、処理として起こり得ます。誤決定自体は観測点配置で説明でき、"
                  "問題はそれが後段の処理で止められなかったことです。")
@@ -248,6 +269,7 @@ def analyse(p: Picks, alert: L.Alert, rel: L.AmpRelation, cutoff: float, tt: L.T
     rep.h("D4 ・ 位置関係 ― 地震は観測網の中で起きたか")
     out = gap > 270 or dmin > 300
     edge = (not out) and gap > 180
+    if out: classes.append("OUT_OF_NETWORK")
     rep.flag("D4", "FLAG" if out else ("INFO" if edge else "PASS"),
              f"方位角ギャップ {gap:.0f}°、最寄り観測点 {dmin:.0f}km、観測点は方位 {baz:.0f}° の側に偏在。"
              + ("観測網の外の地震です。観測網から見た方向の距離と発生時刻とがトレードオフの関係になり、網内の地震で較正した"
@@ -258,12 +280,9 @@ def analyse(p: Picks, alert: L.Alert, rel: L.AmpRelation, cutoff: float, tt: L.T
     # ---- D2 距離による除外
     rep.h(f"D2 ・ 距離による除外（震源から {cutoff:.0f}km）― 関係式に依存しない部分")
     cand = [(N_IND, h)] + ([(N_REF, reference)] if reference else []) + \
-           [(N_MAG, hM)] + ([(N_INT, hI)] if alert.hypocenter_magnitude else [])
-    d2_flag = False
+           ([(N_MAG, hM)] if hM else []) + ([(N_INT, hI)] if alert.hypocenter_magnitude else [])
     tab = []
     for name, hh in cand:
-        if hh is None:
-            continue
         Mc, nc, rmin = network_M(p, hh, rel, cutoff)
         Mn, _, _ = network_M(p, hh, rel, None)
         tab.append({"hypo": name, "stations_within_cutoff": nc, "nearest_R_km": rmin, "M_with_cutoff": Mc, "M_no_cutoff": Mn})
@@ -271,109 +290,125 @@ def analyse(p: Picks, alert: L.Alert, rel: L.AmpRelation, cutoff: float, tt: L.T
               f"M（除外あり）{'  － 推定不能' if Mc is None else f'{Mc:5.1f}'}　M（除外なし）※ {('－' if Mn is None else f'{Mn:4.1f}')}")
     rep.p("  ※ 関係式に依存します。外挿の影響を示すための値で、地震の規模の推定値ではありません。")
     rep.data["D2"] = tab
-    mag_row = next(t for t in tab if t["hypo"] == N_MAG)
-    if mag_row["stations_within_cutoff"] == 0:
-        d2_flag = True
+    mag_row = next((t for t in tab if t["hypo"] == N_MAG), None)
+    if mag_row is None:
+        rep.flag("D2", "N/A", "速報に震源がないため、マグニチュードの計算にどの観測点が使われ得たかが分かりません。")
+    elif Ma is None:
+        rep.flag("D2", "N/A", "速報にマグニチュードがないため、説明すべき値がありません。")
+    elif mag_row["stations_within_cutoff"] == 0:
+        classes.append("CUTOFF_NOT_APPLIED")
         rep.flag("D2", "FLAG", f"速報のM計算の震源から {cutoff:.0f}km 以内に観測点が1つもありません"
                  f"（最寄り {mag_row['nearest_R_km']:.0f}km）。除外機能が働いていれば、マグニチュードは計算できず、"
                  "警報も出なかったはずです。発表された M は、除外されるべき観測点からしか得られません。"
                  "つまり、この除外機能が働いていませんでした。")
-    elif mag_row["M_with_cutoff"] is not None and alert.magnitude is not None and mag_row["M_no_cutoff"] is not None and \
-            abs(mag_row["M_no_cutoff"] - alert.magnitude) < abs(mag_row["M_with_cutoff"] - alert.magnitude) - 0.5:
-        d2_flag = True
+    elif mag_row["M_with_cutoff"] is not None and mag_row["M_no_cutoff"] is not None and \
+            abs(mag_row["M_no_cutoff"] - Ma) < abs(mag_row["M_with_cutoff"] - Ma) - 0.5:
+        classes.append("CUTOFF_NOT_APPLIED")
         rep.flag("D2", "FLAG", "速報の M は、遠方の観測点を含めたときにだけ再現されます。除外機能が適用されていなかった可能性があります。")
     else:
         rep.flag("D2", "PASS", "除外範囲の内側に観測点があり、M の説明に遠方観測点の混入を持ち出す必要はありません。")
-
-    near = int(np.argmin(L.gc_km(hM.lat, hM.lon, p.lat, p.lon)))
-    dnear = float(L.gc_km(hM.lat, hM.lon, p.lat[near], p.lon[near]))
-    g = float(rel.dM_dR(dnear, hM.depth_km))
-    rep.flag("D2", "INFO", f"［関係式に依存］{dnear:.0f}km では、{rel.name} の ∂M/∂R は距離の誤り 100km あたり {g*100:.2f}。"
-             f"震源が 100km 遠くに置かれるごとに M がこれだけ増えます。同じ式で 700km では 100km あたり "
-             f"{float(rel.dM_dR(700, hM.depth_km))*100:.2f}。")
-    if alert.magnitude is not None and mag_row["M_no_cutoff"] is not None:
-        rep.flag("D2", "INFO", f"［関係式に依存］速報のM計算の震源で除外なしに {rel.name} を使うと M{mag_row['M_no_cutoff']:.1f}"
-                 f"（速報は M{alert.magnitude}）。ここで一致するかどうかは、地震そのものより係数の選び方で決まります。"
-                 "検証するには運用式の係数を与えてください。")
+    if hM:
+        dnear = float(L.gc_km(hM.lat, hM.lon, p.lat, p.lon).min())
+        g = float(rel.dM_dR(dnear, hM.depth_km))
+        rep.flag("D2", "INFO", f"［関係式に依存］{dnear:.0f}km では、{rel.name} の ∂M/∂R は距離の誤り 100km あたり {g*100:.2f}。"
+                 f"震源が 100km 遠くに置かれるごとに M がこれだけ増えます。同じ式で 700km では 100km あたり "
+                 f"{float(rel.dM_dR(700, hM.depth_km))*100:.2f}。")
+        if Ma is not None and mag_row["M_no_cutoff"] is not None:
+            rep.flag("D2", "INFO", f"［関係式に依存］速報のM計算の震源で除外なしに {rel.name} を使うと M{mag_row['M_no_cutoff']:.1f}"
+                     f"（速報は M{Ma}）。ここで一致するかどうかは、地震そのものより係数の選び方で決まります。"
+                     "検証するには運用式の係数を与えてください。")
 
     # ---- D3 処理段階間の整合
     rep.h("D3 ・ 段階間の整合 ― マグニチュードと震度予測で同じ震源を使ったか")
-    if alert.hypocenter_magnitude is None:
-        rep.flag("D3", "N/A", "速報に震源が1つしかありません。M計算で別の震源を使ったと発表機関が説明している場合は、"
+    if not hI or alert.hypocenter_magnitude is None:
+        rep.flag("D3", "N/A", "速報の震源は1つ以下です。M計算で別の震源を使ったと発表機関が説明している場合は、"
                  "hypocenter_magnitude として追加してください。")
     else:
-        s = float(L.gc_km(hM.lat, hM.lon, hI.lat, hI.lon))
-        rep.flag("D3", "FLAG" if s > 30 else "PASS",
-                 f"マグニチュードは {hM}、震度予測は {hI} で計算: 両者は {s:.0f}km 離れています。"
-                 + ("遠い震源で膨らんだ M を、近い震源に当てはめたことになり、誤差が重なります。" if s > 30 else ""))
+        sdist = float(L.gc_km(hM.lat, hM.lon, hI.lat, hI.lon))
+        if sdist > 30: classes.append("STAGE_HYPOCENTRE_MISMATCH")
+        rep.flag("D3", "FLAG" if sdist > 30 else "PASS",
+                 f"マグニチュードは {hM}、震度予測は {hI} で計算: 両者は {sdist:.0f}km 離れています。"
+                 + ("遠い震源で膨らんだ M を、近い震源に当てはめたことになり、誤差が重なります。" if sdist > 30 else ""))
 
     # ---- D5 マグニチュードの妥当性
     rep.h("D5 ・ マグニチュードの妥当性")
-    if alert.magnitude is not None:
-        if alert.magnitude >= 9.6:
-            rep.flag("D5", "FLAG", f"M{alert.magnitude} は観測史上最大の 1960年チリ地震（Mw 9.5）を上回ります。気象庁は"
+    Mr = _ref_mag(reference)
+    if Ma is None:
+        rep.flag("D5", "N/A", "速報にマグニチュードがありません。")
+    else:
+        if Ma >= 9.6:
+            classes.append("IMPLAUSIBLE_MAGNITUDE")
+            rep.flag("D5", "FLAG", f"M{Ma} は観測史上最大の 1960年チリ地震（Mw 9.5）を上回ります。気象庁は"
                      "2016年8月1日の事案の後、地震学的に考えられるマグニチュードの上限値を設けるとしています。"
                      "その値と、今回の処理経路でそれが適用されるのかを確認すべきです。")
-        Mr = _ref_mag(reference)
-        if Mr is not None:
-            # 差分: 同じ式を速報の地震と実際の地震に、同じ観測点で当てはめる。距離項の大部分が相殺されるため、
-            # 係数への依存がずっと小さい。
-            pa = rel.predict_logA(alert.magnitude, L.gc_km(hI.lat, hI.lon, p.lat, p.lon), hI.depth_km)
+        if Mr is not None and hI:
+            # 差分: 同じ式を速報の地震と実際の地震に、同じ観測点で当てはめる。距離項の大部分が相殺される。
+            pa = rel.predict_logA(Ma, L.gc_km(hI.lat, hI.lon, p.lat, p.lon), hI.depth_km)
             pr = rel.predict_logA(Mr, L.gc_km(reference.lat, reference.lon, p.lat, p.lon), reference.depth_km)
             ex = float(np.median(pa - pr))
+            if ex > 1: classes.append("MAGNITUDE_MISMATCH")
             rep.flag("D5", "FLAG" if ex > 1 else "PASS",
                      f"速報が正しければ、各観測点は実際の M{Mr} の地震の 約10^{ex:.1f} ＝ {10**ex:,.0f} 倍の揺れを"
                      f"記録していたはずです（差分による比較、{rel.name}）。")
+        elif Mr is not None:
+            dM = Ma - Mr
+            if abs(dM) >= 1: classes.append("MAGNITUDE_MISMATCH")
+            rep.flag("D5", "FLAG" if abs(dM) >= 1 else "PASS",
+                     f"速報の M{Ma} と参照の M{Mr} の差は {dM:+.1f}（エネルギーにして約 {10 ** (1.5 * dM):,.0f} 倍）。")
         else:
             rep.flag("D5", "N/A", "参照マグニチュードがありません。記録そのものとの振幅比較はこの距離では係数次第に"
                      "なるため、行いません。")
 
     # ---- D6 震度
     rep.h("D6 ・ 震度 ― 予測震度と観測震度（司・翠川 1999）")
-    ok = np.isfinite(p.obs_I)
     faithful = False
-    epi_I = L.gc_km(hI.lat, hI.lon, p.lat, p.lon)
-    I_pt = L.pgv_to_shindo(L.predict_pgv(alert.magnitude, hI.depth_km, epi_I, fault_type, site_amp, finite=False))
-    I_alert = L.pgv_to_shindo(L.predict_pgv(alert.magnitude, hI.depth_km, epi_I, fault_type, site_amp, finite=True))
-    Lf = L.fault_length_km(alert.magnitude)
-    rep.p(f"  M{alert.magnitude}・{hI}、点震源: 最大 震度{L.shindo_class(float(I_pt.max()))}"
-          f"（計測震度 {float(I_pt.max()):.1f}）、震度5弱以上 {int((I_pt >= 4.5).sum())}/{len(p)} 観測点")
-    rep.p(f"  M{alert.magnitude}・{hI}、面震源（断層長 約{Lf:,.0f}km）: 最大 震度{L.shindo_class(float(I_alert.max()))}"
-          f"（計測震度 {float(I_alert.max()):.1f}、{p.sta[int(np.argmax(I_alert))]}）、"
-          f"震度5弱以上 {int((I_alert >= 4.5).sum())}/{len(p)} 観測点")
-    rep.p("  （発表機関が公表した予測震度の幅と比べてください。一致すれば、震度予測の段階は誤った入力に対して"
-          "正しく動いたことになります）")
-    Mref = _ref_mag(reference)
-    Mtrue = Mref if Mref is not None else Mdat
-    hT = reference or h
-    if Mtrue is not None:
-        I_true = L.pgv_to_shindo(L.predict_pgv(Mtrue, hT.depth_km, L.gc_km(hT.lat, hT.lon, p.lat, p.lon), fault_type, site_amp, finite=True))
-        rep.p(f"  M{Mtrue:.1f}・{hT}: 最大 震度{L.shindo_class(float(I_true.max()))}（計測震度 {float(I_true.max()):.1f}）")
-    if ok.any():
-        over = float(np.median(I_alert[ok] - p.obs_I[ok]))
-        rep.flag("D6", "FLAG" if over > 1.5 else "PASS",
-                 f"速報の入力による予測震度と観測震度の差: 中央値 {over:+.1f}（観測の最大 震度{L.shindo_class(float(np.nanmax(p.obs_I)))}）。")
-        if Mtrue is not None:
-            fit = float(np.median(I_true[ok] - p.obs_I[ok]))
-            faithful = abs(fit) <= 1.5
-            if over > 1.5:
-                rep.flag("D6", "INFO" if faithful else "FLAG",
-                         f"同じ予測式に正しい M と震源を与えると、観測との差は {fit:+.1f}。"
-                         + ("震度予測の段階は入力に忠実で、不具合はその上流（M・震源）にあります。" if faithful
-                            else "震度予測の段階そのものもずれています。"))
+    ok = np.isfinite(p.obs_I)
+    if Ma is None or not hI:
+        rep.flag("D6", "N/A", "速報のマグニチュードと震源の両方が必要です。")
     else:
-        rep.flag("D6", "N/A", "観測震度の列がありません。上の予測値のみです。")
-    if float(np.min(epi_I)) > 300:
-        rep.flag("D6", "INFO", "すべての観測点が司・翠川式の較正範囲（約300km）の外にあり、予測値は外挿です。")
+        epi_I = L.gc_km(hI.lat, hI.lon, p.lat, p.lon)
+        I_pt = L.pgv_to_shindo(L.predict_pgv(Ma, hI.depth_km, epi_I, fault_type, site_amp, finite=False))
+        I_alert = L.pgv_to_shindo(L.predict_pgv(Ma, hI.depth_km, epi_I, fault_type, site_amp, finite=True))
+        Lf = L.fault_length_km(Ma)
+        rep.p(f"  M{Ma}・{hI}、点震源: 最大 震度{L.shindo_class(float(I_pt.max()))}"
+              f"（計測震度 {float(I_pt.max()):.1f}）、震度5弱以上 {int((I_pt >= 4.5).sum())}/{len(p)} 観測点")
+        rep.p(f"  M{Ma}・{hI}、面震源（断層長 約{Lf:,.0f}km）: 最大 震度{L.shindo_class(float(I_alert.max()))}"
+              f"（計測震度 {float(I_alert.max()):.1f}、{p.sta[int(np.argmax(I_alert))]}）、"
+              f"震度5弱以上 {int((I_alert >= 4.5).sum())}/{len(p)} 観測点")
+        rep.p("  （発表機関が公表した予測震度の幅と比べてください。一致すれば、震度予測の段階は誤った入力に対して"
+              "正しく動いたことになります）")
+        Mtrue = Mr if Mr is not None else Mdat
+        hT = reference or h
+        if Mtrue is not None:
+            I_true = L.pgv_to_shindo(L.predict_pgv(Mtrue, hT.depth_km, L.gc_km(hT.lat, hT.lon, p.lat, p.lon), fault_type, site_amp, finite=True))
+            rep.p(f"  M{Mtrue:.1f}・{hT}: 最大 震度{L.shindo_class(float(I_true.max()))}（計測震度 {float(I_true.max()):.1f}）")
+        if ok.any():
+            over = float(np.median(I_alert[ok] - p.obs_I[ok]))
+            rep.flag("D6", "FLAG" if over > 1.5 else "PASS",
+                     f"速報の入力による予測震度と観測震度の差: 中央値 {over:+.1f}（観測の最大 震度{L.shindo_class(float(np.nanmax(p.obs_I)))}）。")
+            if Mtrue is not None:
+                fit = float(np.median(I_true[ok] - p.obs_I[ok]))
+                faithful = abs(fit) <= 1.5
+                if over > 1.5:
+                    classes.append("INTENSITY_FROM_BAD_INPUTS" if faithful else "INTENSITY_MODEL_MISFIT")
+                    rep.flag("D6", "INFO" if faithful else "FLAG",
+                             f"同じ予測式に正しい M と震源を与えると、観測との差は {fit:+.1f}。"
+                             + ("震度予測の段階は入力に忠実で、不具合はその上流（M・震源）にあります。" if faithful
+                                else "震度予測の段階そのものもずれています。"))
+        else:
+            rep.flag("D6", "N/A", "観測震度の列がありません。上の予測値のみです。")
+        if float(np.min(epi_I)) > 300:
+            rep.flag("D6", "INFO", "すべての観測点が司・翠川式の較正範囲（約300km）の外にあり、予測値は外挿です。")
 
     # ---- D7 1点抜き
     rep.h("D7 ・ 単一観測点への依存（1点ずつ除いて再計算）")
-    M_all, _, _ = network_M(p, hM, rel, None)
+    hMx = hM or h
+    M_all, _, _ = network_M(p, hMx, rel, None)
     worst = []
     for i in range(len(p)):
         mask = np.ones(len(p), bool); mask[i] = False
         q = p.subset(mask)
-        Mi, _, _ = network_M(q, hM, rel, None)
+        Mi, _, _ = network_M(q, hMx, rel, None)
         hi, _, _, _ = locate(q, tt, center=(h.lat, h.lon), half_deg=3.0)
         dM = (Mi - M_all) if (Mi is not None and M_all is not None) else 0.0
         worst.append((abs(dM), float(L.gc_km(h.lat, h.lon, hi.lat, hi.lon)), p.sta[i], dM))
@@ -382,6 +417,7 @@ def analyse(p: Picks, alert: L.Alert, rel: L.AmpRelation, cutoff: float, tt: L.T
     dx_thr = max(50.0, 0.3 * (reg_km if np.isfinite(reg_km) else 0))
     xs = max(worst, key=lambda w: w[1])
     m_dom, x_dom = top[0] > 0.5, xs[1] > dx_thr
+    if m_dom or x_dom: classes.append("SINGLE_STATION_CONTROL")
     if m_dom:
         rep.flag("D7", "FLAG", f"{top[2]} がマグニチュードを左右しています（除くと M が {top[3]:+.2f} 変化）。"
                  "その観測点のデータと、電源・伝送の状態を確認してください（2016年8月1日 富津観測点の事案を参照）。")
@@ -390,90 +426,215 @@ def analyse(p: Picks, alert: L.Alert, rel: L.AmpRelation, cutoff: float, tt: L.T
                  "観測点配置がもろく、この観測点の時刻が正しいことが震源の正しさの前提になっています。")
     if not (m_dom or x_dom):
         rep.flag("D7", "PASS", f"M を 0.5 超、震源を {dx_thr:.0f}km 超動かす観測点はありません（最大は {xs[2]}、{xs[1]:.0f}km）。")
-    rep.data["D7"] = [{"station": s, "dM": dm, "dx_km": dx} for _, dx, s, dm in worst[:5]]
+    rep.data["D7"] = [{"station": s_, "dM": dm, "dx_km": dx} for _, dx, s_, dm in worst[:5]]
 
     # ---- D8 外れ値
     rep.h("D8 ・ 外れ値の読み取り")
     r, _ = residuals(p, tt, h, fixed_t0=True)
     mad = 1.4826 * float(np.median(np.abs(r - np.median(r))))
-    thr = max(3 * mad, 2.0)
+    thr = min(max(3 * mad, 2.0), D8_CAP_S)
     bad = [(p.sta[i], float(r[i])) for i in np.nonzero(np.abs(r) > thr)[0]]
+    rep.data["D8"] = {"threshold_s": thr, "outliers_vs_solution": bad}
     rep.flag("D8", "FLAG" if bad else "PASS",
-             (f"±{thr:.1f} 秒を超える読み取りが {len(bad)} 件: " + "、".join(f"{s} {x:+.1f}秒" for s, x in bad[:8]) +
-              "。別の地震の重なり、または時刻付与の異常の可能性（2006年9月26日、2013年8月8日の事案を参照）。") if bad
+             (f"独立解から ±{thr:.1f} 秒を超える読み取りが {len(bad)} 件: " + "、".join(f"{s_} {x:+.1f}秒" for s_, x in bad[:8]) +
+              "。誤読み取り、別の地震の重なり、または時刻付与の異常の可能性（2006年9月26日、2013年8月8日の事案を参照）。") if bad
              else f"すべての読み取りが独立解から ±{thr:.1f} 秒以内です。")
+    # 誤った読み取りは独立解そのものを引きずるので、カタログの発生時刻・震源という外部の物差しでも確かめる
+    if reference is not None and reference.time is not None:
+        rr, _ = residuals(p, tt, reference, fixed_t0=True)
+        bad_ref = [(p.sta[i], float(rr[i])) for i in np.nonzero(np.abs(rr) > D8_CAP_S)[0]]
+        rep.data["D8"]["outliers_vs_reference"] = bad_ref
+        rep.flag("D8", "FLAG" if bad_ref else "PASS",
+                 (f"参照の震源・発生時刻から予測される P 波到達時刻と ±{D8_CAP_S:.0f} 秒以上ずれた読み取りが "
+                  f"{len(bad_ref)}/{len(p)} 件: " + "、".join(f"{s_} {x:+.1f}秒" for s_, x in bad_ref[:8]) +
+                  "。D1・D4・D7 を信頼する前に読み取り直してください。") if bad_ref
+                 else f"すべての読み取りが、参照の震源から予測される P 波到達時刻の ±{D8_CAP_S:.0f} 秒以内です。")
+        bad = bad + bad_ref
+    if bad: classes.append("OUTLIER_PICKS")
 
     # ---- まとめ
     rep.h("まとめ ― データが支持する不具合の類型")
-    codes = {c["code"] for c in rep.data.get("checks", []) if c["status"] == "FLAG"}
-    lines = []
-    if "D4" in codes: lines.append("観測網の外の地震: 観測網から見た方向に沿って震源が決まりにくい（関係式に依存しない）。")
-    if d2_flag: lines.append(f"マグニチュードの計算に、{cutoff:.0f}km の除外範囲を超える観測点が使われた（関係式に依存しない）。")
-    if "D3" in codes: lines.append("マグニチュードと震度予測で異なる震源が使われた（関係式に依存しない）。")
-    if "D6" in codes and faithful: lines.append("震度の過大予測は M・震源の入力に起因し、震度予測式そのものは正常。")
-    elif "D6" in codes: lines.append("震度が過大に予測され、正しい入力でも予測式が観測と合わない。")
-    if "D7" in codes: lines.append("1観測点が M または震源を左右している。その観測点のデータ・時計・状態を確認。")
-    if "D8" in codes: lines.append("外れ値の読み取りがある。別の地震の重なりや時刻付与の異常を確認。")
-    flagged = bool(lines)
-    if not lines: lines.append("該当する不具合の類型はありません。")
-    for s in lines: rep.p(f"  ・{s}")
-    if flagged:
+    text = {
+        "OUT_OF_NETWORK": "観測網の外の地震: 観測網から見た方向に沿って震源が決まりにくい（関係式に依存しない）。",
+        "EARLY_SOLUTION_AMBIGUOUS": "最初の数観測点だけでは、速報の震源が真の震源と同程度にデータに合う（関係式に依存しない）。",
+        "CUTOFF_NOT_APPLIED": f"マグニチュードの計算に、{cutoff:.0f}km の除外範囲を超える観測点が使われた（関係式に依存しない）。",
+        "STAGE_HYPOCENTRE_MISMATCH": "マグニチュードと震度予測で異なる震源が使われた（関係式に依存しない）。",
+        "IMPLAUSIBLE_MAGNITUDE": "観測史上どの地震よりも大きいマグニチュード。妥当性の上限で止まるべきだった。",
+        "MAGNITUDE_MISMATCH": "マグニチュードが参照の地震と 1 以上異なる。",
+        "INTENSITY_FROM_BAD_INPUTS": "震度の過大予測は M・震源の入力に起因し、震度予測式そのものは正常。",
+        "INTENSITY_MODEL_MISFIT": "震度が過大に予測され、正しい入力でも予測式が観測と合わない。",
+        "SINGLE_STATION_CONTROL": "1観測点が M または震源を左右している。その観測点のデータ・時計・状態を確認。",
+        "OUTLIER_PICKS": "外れ値の読み取りがある。読み取り直すか、別の地震の重なりや時刻付与の異常を確認。",
+    }
+    shown = [c for c in text if c in classes]
+    for c in shown: rep.p(f"  ・{text[c]}")
+    if not shown:
+        rep.p("  ・該当する不具合の類型はありません。")
+    else:
         rep.p("")
         rep.p("  観測データだけでは判断できないこと: 除外機能などの歯止めが働かなかった原因が、改修時のデグレードか、設定変更か、")
         rep.p("  無許可の改変か。これには発表機関の変更履歴が必要です。")
-    rep.data["summary"] = lines
+    rep.data["failure_classes"] = shown
+    rep.data["summary"] = [text[c] for c in shown]
 
 
 # ======================================================================== 波形
-def picks_from_waveforms(data_dir, coords_csv, inventory, t0, window, amp_window, out_csv):
-    from obspy import read, read_inventory, UTCDateTime
-    from obspy.signal.trigger import recursive_sta_lta, trigger_onset
+WAVEFORM_SUFFIXES = {".mseed", ".miniseed", ".msd", ".ms", ".sac"}
+LOC_PRIORITY = ["00", "", "10", "01", "20", "02"]
+BAND_PRIORITY = ["BH", "HH", "EH", "SH", "BN", "HN", "LH"]
 
-    st = read(str(Path(data_dir) / "*"))
+
+def waveform_files(data):
+    """波形ファイルだけを返す。同じフォルダの StationXML や CSV は読まない。"""
+    p = Path(data)
+    if p.is_file():
+        return [p], []
+    files = sorted(f for f in p.iterdir() if f.is_file() and f.suffix.lower() in WAVEFORM_SUFFIXES)
+    skipped = sorted(f.name for f in p.iterdir() if f.is_file() and f.suffix.lower() not in WAVEFORM_SUFFIXES)
+    return files, skipped
+
+
+def choose_channels(traces):
+    """
+    観測点ごとに1つの地震計を選ぶ。ロケーションコード（00 → "" → 10 …）、帯域（BH → HH → EH …）の順に、
+    上下動成分を持つ最初の組み合わせ。戻り値は（上下動トレース、その組み合わせの全トレース）または (None, None)。
+    """
+    combos = {}
+    for tr in traces:
+        combos.setdefault((tr.stats.location, tr.stats.channel[:2]), []).append(tr)
+
+    def rank(k):
+        loc, band = k
+        return (LOC_PRIORITY.index(loc) if loc in LOC_PRIORITY else len(LOC_PRIORITY),
+                BAND_PRIORITY.index(band) if band in BAND_PRIORITY else len(BAND_PRIORITY))
+    for key in sorted(combos, key=rank):
+        z = [tr for tr in combos[key] if tr.stats.channel[-1] in "Z3"]
+        if z:
+            return z[0], combos[key]
+    return None, None
+
+
+def pick_p(tr, t_exp=None, tol=30.0, sta_s=1.0, lta_s=20.0):
+    """
+    上下動トレース1本から P 波の立ち上がりを読む。LTA の立ち上がり区間のトリガーは無視する。予測到達時刻が
+    あれば、その ±tol 秒以内のトリガーだけを候補にし（最も早いものを採用）、1つもなければ窓内の AIC 読み取りを
+    雑音より明瞭な場合に限って採用する。戻り値は（UTCDateTime または None、方法、メモ）。
+    """
+    from obspy.signal.trigger import recursive_sta_lta, trigger_onset
+    tr = tr.copy(); tr.detrend("demean"); tr.taper(0.02)
+    sr = tr.stats.sampling_rate
+    tr.filter("bandpass", freqmin=0.5, freqmax=min(8.0, 0.4 * sr))
+    x = tr.data.astype(float)
+    n = len(x)
+    warm = int(1.5 * lta_s * sr)
+    cft = recursive_sta_lta(x, int(sta_s * sr), int(lta_s * sr))
+    onsets = [int(o[0]) for o in trigger_onset(cft, 3.5, 1.0) if o[0] > warm]
+    lo_i, hi_i = warm, n - 1
+    if t_exp is not None:
+        i_exp = int(round((t_exp - tr.stats.starttime) * sr))
+        lo_i, hi_i = max(i_exp - int(tol * sr), warm), min(i_exp + int(tol * sr), n - 1)
+        if hi_i - lo_i < int(4 * sr):
+            return None, "", "予測到達時刻が記録の外（または STA/LTA の立ち上がり区間）にある"
+        onsets = [i for i in onsets if lo_i <= i <= hi_i]
+    method = "sta/lta"
+    if onsets:
+        i0 = onsets[0]
+        a, b = max(i0 - int(5 * sr), lo_i, 1), min(i0 + int(3 * sr), hi_i)
+    elif t_exp is not None:
+        method, a, b = "aic-window", lo_i, hi_i
+    else:
+        return None, "", "立ち上がり区間の後にトリガーなし"
+    seg = x[a:b]
+    k = np.arange(2, len(seg) - 2)
+    if k.size < 4:
+        return None, "", "窓が短すぎる"
+    aic = np.array([kk * np.log(np.var(seg[:kk]) + 1e-20) + (len(seg) - kk - 1) * np.log(np.var(seg[kk + 1:]) + 1e-20) for kk in k])
+    ip = a + int(k[np.argmin(aic)])
+    w = int(5 * sr)
+    snr = float(np.std(x[ip:ip + w]) / (np.std(x[max(ip - w, 0):ip]) + 1e-20))
+    if snr < 2.5:
+        return None, "", f"明瞭な立ち上がりなし（SN比 {snr:.1f}）"
+    return tr.stats.starttime + ip / sr, method, f"SN比 {snr:.1f}"
+
+
+def picks_from_waveforms(data_dir, coords_csv, inventory, expect, tol, amp_window, out_csv):
+    """
+    expect: 発生時刻つきの L.Hypo（通常はカタログの地震）。各観測点の P 波到達時刻の予測に使い、
+    読み取りをその ±tol 秒以内に限る。None なら制約なし（実データには非推奨）。
+    """
+    from obspy import read, read_inventory, Stream, UTCDateTime
+
+    files, skipped = waveform_files(data_dir)
+    if skipped:
+        print(f"[波形] 波形データではないため読み飛ばし: {'、'.join(skipped)}", file=sys.stderr)
+    if not files:
+        raise SystemExit(f"{data_dir} に波形ファイル（*.mseed、*.sac など）がありません。")
+    st = Stream()
+    for f in files:
+        st += read(str(f))
     st.merge(fill_value=0)
+    if inventory is None and Path(data_dir).is_dir() and (Path(data_dir) / "stations.xml").exists():
+        inventory = str(Path(data_dir) / "stations.xml")
+        print(f"[波形] 座標と計器応答に {inventory} を使います", file=sys.stderr)
     inv = read_inventory(inventory) if inventory else None
     coords = {}
     if coords_csv:
         for r in L.read_csv_rows(coords_csv):
             coords[r["station"]] = (float(r["lat"]), float(r["lon"]), float(r.get("counts_per_um") or 1.0))
-    T0 = UTCDateTime(t0.isoformat()) if t0 else min(tr.stats.starttime for tr in st)
+    tt = L.TravelTimes(quiet=True)
+    if expect is None:
+        print("[波形] 警告: 参照の震源・発生時刻がないため、読み取りに制約がかかりません。--reference（USGS の地震など）を"
+              "与えると、各観測点の読み取りを予測到達時刻の前後に限定できます。", file=sys.stderr)
+
     rows = []
-    for sta in sorted({tr.stats.station for tr in st}):
-        s = st.select(station=sta).copy()
-        s.trim(T0, T0 + window)
-        z = s.select(component="Z") or s
-        tr = z[0].copy(); tr.detrend("demean"); tr.taper(0.02)
-        tr.filter("bandpass", freqmin=0.5, freqmax=8.0)
-        sr = tr.stats.sampling_rate
-        cft = recursive_sta_lta(tr.data.astype(float), int(1 * sr), int(20 * sr))
-        on = [o for o in trigger_onset(cft, 3.5, 1.0) if o[0] > int(1.5 * 20 * sr)]   # LTA 立ち上がり部は無視
-        if len(on) == 0:
-            print(f"[波形] {sta}: トリガーなし", file=sys.stderr)
+    for net, sta in sorted({(tr.stats.network, tr.stats.station) for tr in st}):
+        z, group = choose_channels([tr for tr in st if tr.stats.network == net and tr.stats.station == sta])
+        name = f"{net}.{sta}" if net else sta
+        if z is None:
+            print(f"[波形] {name}: 上下動成分がないため除外", file=sys.stderr)
             continue
-        i0 = int(on[0][0])
-        a, b = max(i0 - int(5 * sr), 1), min(i0 + int(3 * sr), len(tr.data) - 1)     # AIC で到達時刻を補正
-        x = tr.data[a:b].astype(float)
-        k = np.arange(1, len(x) - 1)
-        aic = np.array([kk * np.log(np.var(x[:kk]) + 1e-20) + (len(x) - kk - 1) * np.log(np.var(x[kk + 1:]) + 1e-20) for kk in k])
-        tP = tr.stats.starttime + (a + int(k[np.argmin(aic)])) / sr
-        disp = s.copy()                                                               # P 波後の最大変位（μm）
         if inv is not None:
-            disp.remove_response(inventory=inv, output="DISP", pre_filt=(0.05, 0.1, 10, 15))
+            try:
+                c = inv.get_coordinates(z.id, z.stats.starttime)
+                lat, lon = c["latitude"], c["longitude"]
+            except Exception:  # noqa: BLE001
+                print(f"[波形] {name}: {z.id} が StationXML にないため除外", file=sys.stderr)
+                continue
+        elif name in coords or sta in coords:
+            lat, lon = coords.get(name, coords.get(sta))[:2]
+        else:
+            print(f"[波形] {name}: 座標がないため除外", file=sys.stderr)
+            continue
+        t_exp = None
+        if expect is not None:
+            d = float(L.gc_km(expect.lat, expect.lon, lat, lon))
+            t_exp = UTCDateTime(expect.time.isoformat()) + float(tt.p(d, expect.depth_km))
+        tP, method, note = pick_p(z, t_exp, tol)
+        if tP is None:
+            print(f"[波形] {name} {z.stats.channel}: 読み取りなし ― {note}", file=sys.stderr)
+            continue
+        disp = Stream([tr.copy() for tr in group])
+        if inv is not None:
+            sr = z.stats.sampling_rate
+            disp.remove_response(inventory=inv, output="DISP", pre_filt=(0.05, 0.1, 0.36 * sr, 0.4 * sr))
             scale = 1e6
         else:
             disp.detrend("demean")                     # 応答なし: 変位データとみなし、感度（counts/μm）で換算
-            scale = 1.0 / coords.get(sta, (0, 0, 1.0))[2]
-        hz = disp.select(component="[NE12]") or disp
-        amp = max(float(np.max(np.abs(t.slice(tP, tP + amp_window).data))) for t in hz) * scale
-        if inv is not None:
-            c = inv.get_coordinates(z[0].id, tP)
-            lat, lon = c["latitude"], c["longitude"]
-        else:
-            lat, lon = coords[sta][:2]
-        rows.append({"観測点": sta, "緯度": lat, "経度": lon,
-                     "P波到達時刻": tP.datetime.replace(tzinfo=timezone.utc).astimezone(L.JST).isoformat(timespec="milliseconds"), "最大変位(μm)": f"{amp:.4g}"})
-    L.write_csv_rows(out_csv, ["観測点", "緯度", "経度", "P波到達時刻", "最大変位(μm)"], rows)
+            scale = 1.0 / coords.get(name, coords.get(sta))[2]
+        hz = [tr for tr in disp if tr.stats.channel[-1] in "NE12"] or [tr for tr in disp if tr.stats.channel[-1] in "Z3"]
+        amp = max(float(np.max(np.abs(tr.slice(tP, tP + amp_window).data))) for tr in hz) * scale
+        off = (tP - t_exp) if t_exp is not None else None
+        rows.append({"観測点": name, "緯度": lat, "経度": lon,
+                     "P波到達時刻": tP.datetime.replace(tzinfo=timezone.utc).astimezone(L.JST).isoformat(timespec="milliseconds"),
+                     "最大変位(μm)": f"{amp:.4g}", "チャンネル": z.id, "読み取り方法": method,
+                     "予測時刻との差(秒)": "" if off is None else f"{off:+.2f}"})
+        print(f"[波形] {name} {z.id}: P {L.fmt_time(tP.datetime.replace(tzinfo=timezone.utc))}（{method}、{note}"
+              + (f"、予測との差 {off:+.1f} 秒）" if off is not None else "）"), file=sys.stderr)
+    L.write_csv_rows(out_csv, ["観測点", "緯度", "経度", "P波到達時刻", "最大変位(μm)", "チャンネル", "読み取り方法",
+                               "予測時刻との差(秒)"], rows)
     print(f"[波形] {len(rows)} 観測点を読み取り → {out_csv}", file=sys.stderr)
+    if len(rows) < 3:
+        raise SystemExit("使える読み取りが3観測点未満のため、震源を決められません。")
     return out_csv
 
 
@@ -528,10 +689,10 @@ def run_analysis(picks_csv, a):
     sys.stdout.write(rep.text())
     if a.json:
         L.write_json(a.json, rep.data)
+    return rep.data
 
 
-def main(argv=None):
-    L.setup_console()
+def build_parser() -> argparse.ArgumentParser:
     L.localize_argparse()
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True, title="サブコマンド")
@@ -540,16 +701,16 @@ def main(argv=None):
     s.add_argument("--picks", required=True, help="読み取り値の CSV")
 
     s = sub.add_parser("waveforms", help="波形から読み取ってから解析する"); _common(s)
-    s.add_argument("--data", required=True, help="miniSEED／SAC のディレクトリ")
-    s.add_argument("--inventory", help="計器応答を含む StationXML（推奨）")
+    s.add_argument("--data", required=True, help="miniSEED／SAC のディレクトリ（fetch の出力先など）またはファイル1つ")
+    s.add_argument("--inventory", help="計器応答を含む StationXML（省略時、--data に stations.xml があればそれを使う）")
     s.add_argument("--coords", help="StationXML がない場合の観測点 CSV（観測点,緯度,経度[,感度]）")
-    s.add_argument("--start", help="解析窓の開始時刻（タイムゾーン省略時は JST）")
-    s.add_argument("--window", type=float, default=600, help="解析窓の長さ（秒）")
+    s.add_argument("--pick-tol", type=float, default=30.0,
+                   help="--reference から予測した P 波到達時刻の前後この秒数以内の読み取りだけを採用する")
     s.add_argument("--amp-window", type=float, default=30, help="最大変位を測る P 波後の秒数")
     s.add_argument("--picks-out", default="picks_from_waveforms.csv", help="読み取り結果の出力先")
 
     s = sub.add_parser("fetch", help="FDSN データセンターから取得する")
-    s.add_argument("--provider", default="IRIS", help="FDSN データセンター名")
+    s.add_argument("--provider", default="EARTHSCOPE", help="FDSN データセンター名（既定 EARTHSCOPE）")
     s.add_argument("--stations", required=True, help="NET.STA のカンマ区切り（例 II.ERM,IU.MAJO,IU.PET,IU.YSS,G.INU）")
     s.add_argument("--origin", required=True, help="発生時刻（タイムゾーン省略時は JST）")
     s.add_argument("--before", type=float, default=60, help="発生時刻の何秒前から")
@@ -560,16 +721,28 @@ def main(argv=None):
     s.add_argument("page", help="保存した「緊急地震速報の内容」ページ（HTML またはテキスト）")
     s.add_argument("--serial", type=int, help="この報を速報 JSON として書き出す")
     s.add_argument("--out", help="速報 JSON の出力先（--serial と併用）")
+    return ap
 
-    a = ap.parse_args(argv)
+
+def main(argv=None):
+    L.setup_console()
+    a = build_parser().parse_args(argv)
     if a.cmd == "picks":
-        run_analysis(a.picks, a)
-    elif a.cmd == "waveforms":
-        out = picks_from_waveforms(a.data, a.coords, a.inventory, L.parse_time(a.start), a.window, a.amp_window, a.picks_out)
-        run_analysis(out, a)
-    elif a.cmd == "fetch":
+        return run_analysis(a.picks, a)
+    if a.cmd == "waveforms":
+        ref = load_reference(a.reference)
+        alert = L.load_alert(a.alert)
+        expect = ref if (ref is not None and ref.time is not None) else None
+        if expect is None and alert.h_int is not None and alert.origin_time is not None:
+            expect = L.Hypo(alert.h_int.lat, alert.h_int.lon, alert.h_int.depth_km, alert.origin_time, "速報")
+            print("[波形] 予測到達時刻を【速報の震源】から計算します。速報が誤っていれば窓も誤るので、"
+                  "--reference の指定を勧めます。", file=sys.stderr)
+        out = picks_from_waveforms(a.data, a.coords, a.inventory, expect, a.pick_tol, a.amp_window, a.picks_out)
+        return run_analysis(out, a)
+    if a.cmd == "fetch":
         fetch(a.provider, a.stations.split(","), a.origin, a.before, a.after, a.out)
-    elif a.cmd == "jma-history":
+        return None
+    if a.cmd == "jma-history":
         h = L.parse_jma_history(L.read_text(a.page))
         print(f"地震波検知: {L.fmt_time(h['detected_at'])}")
         print(f"{L.rjust_w('報', 4)}  {L.ljust_w('発表時刻', 25)}{L.rjust_w('経過秒', 8)}{L.rjust_w('北緯', 7)}"
@@ -591,6 +764,7 @@ def main(argv=None):
             out = a.out or f"alert_serial{a.serial}.json"
             Path(out).write_text(json.dumps(al, ensure_ascii=False, indent=2), encoding="utf-8")
             print(f"→ {out}")
+        return h
 
 
 if __name__ == "__main__":

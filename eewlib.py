@@ -339,7 +339,7 @@ class TravelTimes:
         if self._interp is not None:
             pts = np.stack([np.clip(dist_km / 111.195, 0, self.DIST_DEG[-1]),
                             np.clip(depth, 0, self.DEPTH_KM[-1])], axis=-1)
-            return self._interp(pts)
+            return np.asarray(self._interp(pts)).reshape(dist_km.shape)
         r = hypo_km(dist_km, depth)                                   # 簡易モデル
         return np.where(r < 150, r / 6.0, 150 / 6.0 + (r - 150) / 8.0)
 
@@ -536,6 +536,15 @@ def parse_jma_coordinate(s: str) -> tuple[float, float, float] | None:
     return lat, lon, depth
 
 
+def _num_or_none(v):
+    """有限の数値なら float、欠測・NaN・解釈不能なら None。"""
+    try:
+        f = float(nfkc(v)) if isinstance(v, str) else float(v)
+    except (TypeError, ValueError):
+        return None
+    return f if math.isfinite(f) else None
+
+
 def load_alert(path) -> Alert:
     """正規化済み JSON、または気象庁防災情報XML（VXSE43/44/45）から速報を読む。"""
     text = read_text(path)
@@ -545,7 +554,7 @@ def load_alert(path) -> Alert:
             source=d.get("source", ""), event_id=str(d.get("event_id", "") or ""), serial=d.get("serial"),
             info_type=d.get("info_type", ""), issued_at=parse_time(d.get("issued_at")),
             detected_at=parse_time(d.get("detected_at")), origin_time=parse_time(d.get("origin_time")),
-            magnitude=d.get("magnitude"), hypocenter=Hypo.from_dict(d.get("hypocenter"), "速報"),
+            magnitude=_num_or_none(d.get("magnitude")), hypocenter=Hypo.from_dict(d.get("hypocenter"), "速報"),
             hypocenter_magnitude=Hypo.from_dict(d.get("hypocenter_magnitude"), "速報M"),
             region=d.get("region", ""), message_digest=d.get("message_digest", ""), notes=d.get("notes", []))
     root = ET.fromstring(text)
@@ -564,12 +573,17 @@ def load_alert(path) -> Alert:
             if xy and "日本測地系" not in c.get("type", ""):
                 a.hypocenter = Hypo(*xy, time=a.origin_time, label="速報")
                 break
-    for m in _find_all(root, "Magnitude"):
-        try:
-            a.magnitude = float(m.text)
-            break
-        except (TypeError, ValueError):
-            continue
+    mags = _find_all(root, "Magnitude")
+    if mags:
+        m = mags[0]
+        # 気象庁はマグニチュード不明を condition="不明"、本文 "NaN" で表す
+        cond = (m.get("condition") or "").strip()
+        v = _num_or_none(m.text)
+        if cond or v is None:
+            a.magnitude = None
+            a.notes.append(f"マグニチュード不明（condition={cond or '－'}、description={m.get('description', '')}）")
+        else:
+            a.magnitude = v
     return a
 
 

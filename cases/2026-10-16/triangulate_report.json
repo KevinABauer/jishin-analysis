@@ -65,12 +65,12 @@
     {
       "code": "C1",
       "status": "INFO",
-      "message": "独立カタログ: M6.9（mww）76 km NE of Ozernovskiy, Russia、北緯51.985° 東経157.270° 深さ135km、発生 2026/10/16 12:35:31.0 JST（fixture-kamchatka-20261016）。"
+      "message": "独立カタログ: M6.9（mww）76 km NE of Ozernovskiy, Russia、北緯51.985° 東経157.270° 深さ135km、発生 2026/10/16 12:35:31.9 JST（fixture-kamchatka-20261016）。"
     },
     {
       "code": "C2",
       "status": "FLAG",
-      "message": "速報の震源要素が実際の地震と食い違います。震央は 503km 離れ、マグニチュードは +3.0（エネルギーにして約 31,623 倍）。地震そのものは本物ですが、速報はその地震を正しく表していません。"
+      "message": "速報の震源要素が実際の地震と食い違います。マグニチュードの差は +3.0（エネルギーにして約 31,623 倍）、震央は 503km 離れています。地震そのものは本物ですが、速報はその地震を正しく表していません。"
     },
     {
       "code": "C3",
@@ -80,7 +80,7 @@
     {
       "code": "C4",
       "status": "PASS",
-      "message": "機関の地震波検知 2026/10/16 12:38:10.1 JST に対し、実際の地震の P 波が観測網に最初に届く時刻は知床・羅臼（1259km、走時 157.6 秒）で 2026/10/16 12:38:08.6 JST。差は +1.5 秒。検知のきっかけは、まさにこの地震の P 波です。"
+      "message": "機関の地震波検知 2026/10/16 12:38:10.1 JST に対し、実際の地震の P 波が観測網に最初に届く時刻は知床・羅臼（1259km、走時 157.6 秒）で 2026/10/16 12:38:09.5 JST。差は +0.6 秒。検知のきっかけは、まさにこの地震の P 波です。"
     }
   ],
   "footprint": {
@@ -97,35 +97,41 @@
       "tv"
     ],
     "distinct_digests": 1,
-    "t_spread_p5_p95_s": 3.121
+    "t_spread_p5_p95_s": 3.121,
+    "min_local_receipts": 10
   },
   "catalog_event": {
     "id": "fixture-kamchatka-20261016",
     "mag": 6.9,
     "magType": "mww",
     "place": "76 km NE of Ozernovskiy, Russia",
-    "time": "2026-10-16T03:35:31+00:00",
+    "time": "2026-10-16T03:35:31.900000+00:00",
     "hypo": {
       "lat": 51.985,
       "lon": 157.27,
       "depth_km": 135.0,
-      "time": "2026-10-16T03:35:31+00:00"
+      "time": "2026-10-16T03:35:31.900000+00:00"
     }
   },
   "discrepancy": {
-    "epicentre_sep_km": 503.1773311381991,
     "dM": 3.0,
-    "energy_ratio": 31622.776601683792
+    "energy_ratio": 31622.776601683792,
+    "epicentre_sep_km": 503.1773311381991,
+    "compared": [
+      "magnitude",
+      "location"
+    ]
   },
   "timing": {
     "first_point": "知床・羅臼",
     "distance_km": 1258.727669946257,
     "p_travel_s": 157.6483292737157,
-    "predicted_first_p": "2026-10-16T03:38:08.648329+00:00",
+    "predicted_first_p": "2026-10-16T03:38:09.548329+00:00",
     "agency_detected": "2026-10-16T03:38:10.100000+00:00",
-    "lag_s": 1.451671
+    "lag_s": 0.551671
   },
   "verdict": {
+    "code": "PROCESSING_FAULT",
     "verdict": "発表機関から出た本物の速報で、内容が誤り ― 処理不具合の類型",
     "because": [
       "実際に地震が起きている",
