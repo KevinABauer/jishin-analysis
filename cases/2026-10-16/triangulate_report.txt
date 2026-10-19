@@ -1,4 +1,6 @@
 Alert: JMA 千島列島 M9.9 at 48.200°N 153.400°E 140 km — issued 2026-10-16 12:40:02.6 JST (serial 17, detected 2026-10-16 12:38:10.1 JST)
+  note: serial/issue/detection time, hypocentre 48.2N 153.4E 140 km and M9.9 are as published on JMA's 緊急地震速報(警報)発表状況 page for this event
+  note: hypocenter_magnitude is a RECONSTRUCTION: JMA stated M was computed ~680 km farther from Japan than the true source; exact coordinates not published
 
 A · Authority — does the agency's own record contain this alert?
 ────────────────────────────────────────────────────────────────
@@ -11,10 +13,10 @@ B · Footprint — what does the distribution pattern say about the origin?
 
 C · Physics — is there a real earthquake behind the alert?
 ──────────────────────────────────────────────────────────
-  [C1] · info  Independent catalogue: M6.9 mww — 76 km NE of Ozernovskiy, Russia — 51.985°N 157.270°E 135 km at 2026-10-16 12:35:31.0 JST (fixture-kamchatka-20261016).
-  [C2] ⚑ FLAG  Alert parameters disagree with the real event: epicentre 503 km away, ΔM = +3.0 (≈31,623× the energy). The event is real; the alert's description of it is not.
+  [C1] · info  Independent catalogue: M6.9 mww — 76 km NE of Ozernovskiy, Russia — 51.985°N 157.270°E 135 km at 2026-10-16 12:35:31.9 JST (fixture-kamchatka-20261016).
+  [C2] ⚑ FLAG  Alert parameters disagree with the real event: ΔM = +3.0 (≈31,623× the energy); epicentre 503 km away. The event is real; the alert's description of it is not.
   [C3] ⚑ FLAG  M9.9 exceeds the largest instrumentally recorded earthquake (Chile 1960, Mw 9.5). Physically possible in principle, but as a prior it marks an estimator operating outside its envelope.
-  [C4] ✓ pass  Agency detection 2026-10-16 12:38:10.1 JST vs. real event's P wave first reaching the network (Shiretoko/Rausu, 1259 km, 157.6 s travel) at 2026-10-16 12:38:08.6 JST: lag +1.5 s. The trigger WAS that earthquake's P wave.
+  [C4] ✓ pass  Agency detection 2026-10-16 12:38:10.1 JST vs. real event's P wave first reaching the network (Shiretoko/Rausu, 1259 km, 157.6 s travel) at 2026-10-16 12:38:09.5 JST: lag +0.6 s. The trigger WAS that earthquake's P wave.
 
 Verdict
 ───────

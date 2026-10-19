@@ -4,7 +4,7 @@
       "lat": 52.0804,
       "lon": 157.6229,
       "depth_km": 115.0,
-      "time": "2026-10-16T03:35:27.056124+00:00"
+      "time": "2026-10-16T03:35:27.956124+00:00"
     },
     "mean_abs_res_s": 0.2294229838344474,
     "region_km": 479.5305341458816,
@@ -88,6 +88,11 @@
       "code": "D8",
       "status": "PASS",
       "message": "all picks within ±2.0 s of the independent solution."
+    },
+    {
+      "code": "D8",
+      "status": "PASS",
+      "message": "all picks within ±10 s of the P times predicted by the reference origin."
     }
   ],
   "early_solutions": [
@@ -97,7 +102,7 @@
         "lat": 52.1104,
         "lon": 155.8929,
         "depth_km": 0.0,
-        "time": "2026-10-16T03:35:32.707541+00:00"
+        "time": "2026-10-16T03:35:33.607541+00:00"
       },
       "region_km": 1350.3800759565777,
       "permits": [
@@ -110,7 +115,7 @@
         "lat": 52.6704,
         "lon": 156.8329,
         "depth_km": 0.0,
-        "time": "2026-10-16T03:35:21.753677+00:00"
+        "time": "2026-10-16T03:35:22.653677+00:00"
       },
       "region_km": 1268.7755784180194,
       "permits": [
@@ -123,7 +128,7 @@
         "lat": 48.8904,
         "lon": 151.3329,
         "depth_km": 35.0,
-        "time": "2026-10-16T03:36:35.522058+00:00"
+        "time": "2026-10-16T03:36:36.422058+00:00"
       },
       "region_km": 1356.850324711215,
       "permits": []
@@ -134,7 +139,7 @@
         "lat": 50.4304,
         "lon": 153.4329,
         "depth_km": 120.0,
-        "time": "2026-10-16T03:36:08.063644+00:00"
+        "time": "2026-10-16T03:36:08.963644+00:00"
       },
       "region_km": 1024.886205900598,
       "permits": []
@@ -197,10 +202,27 @@
       "dx_km": 1.305185617058516
     }
   ],
+  "D8": {
+    "threshold_s": 2.0,
+    "outliers_vs_solution": [],
+    "outliers_vs_reference": []
+  },
+  "failure_classes": [
+    "OUT_OF_NETWORK",
+    "EARLY_SOLUTION_AMBIGUOUS",
+    "CUTOFF_NOT_APPLIED",
+    "STAGE_HYPOCENTRE_MISMATCH",
+    "IMPLAUSIBLE_MAGNITUDE",
+    "MAGNITUDE_MISMATCH",
+    "INTENSITY_FROM_BAD_INPUTS"
+  ],
   "summary": [
     "Out-of-network event: location under-determined along the back-azimuth (relation-independent).",
+    "With only the first few picks, the alert's hypocentre fits as well as the true one (relation-independent).",
     "Magnitude used stations beyond the 700 km safeguard (relation-independent).",
     "Magnitude and intensity stages used different hypocentres (relation-independent).",
+    "Magnitude above any instrumentally recorded event — a plausibility ceiling should have stopped it.",
+    "Magnitude far from the reference event's (≥1 unit).",
     "Intensity over-prediction follows from the M/location inputs; the intensity model itself behaves."
   ]
 }

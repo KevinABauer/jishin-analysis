@@ -31,7 +31,7 @@ STATIONS = {  # name: (lat, lon) — approximate, Hokkaido → Tokai
  "MITO": (36.37,140.47), "CHOSHI": (35.73,140.83), "TOKYO": (35.68,139.77), "NAGANO": (36.65,138.19),
 }
 
-TRUE = L.Hypo(51.985, 157.270, 135.0, datetime(2026, 10, 16, 3, 35, 31, tzinfo=timezone.utc), "USGS")
+TRUE = L.Hypo(51.985, 157.270, 135.0, datetime(2026, 10, 16, 3, 35, 31, 900000, tzinfo=timezone.utc), "USGS")
 M_TRUE = 6.9
 tt = L.TravelTimes()
 truth = L.RELATIONS["tsuboi"]

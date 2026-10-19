@@ -95,7 +95,7 @@ def check_authority(alert: L.Alert, auth_paths: list[str], rep: L.Report) -> str
 # ------------------------------------------------------------- B. footprint
 def load_receipts(path):
     rows = []
-    with open(path, newline="", encoding="utf-8") as f:
+    with open(path, newline="", encoding="utf-8-sig") as f:
         for r in csv.DictReader(f):
             rows.append({
                 "t": L.parse_time(r["received_at"]), "lat": float(r["lat"]), "lon": float(r["lon"]),
@@ -148,7 +148,7 @@ def multilaterate_rssi(rows, rep: L.Report):
     return res
 
 
-def check_footprint(rows, rep: L.Report) -> str:
+def check_footprint(rows, rep: L.Report, min_local: int = 10) -> str:
     rep.h("B · Footprint — what does the distribution pattern say about the origin?")
     if not rows:
         rep.flag("B0", "N/A", "No receipts supplied (--receipts).")
@@ -163,12 +163,16 @@ def check_footprint(rows, rep: L.Report) -> str:
     ts = sorted(r["t"] for r in rows if r["t"])
     spread = (ts[int(0.95 * (len(ts) - 1))] - ts[int(0.05 * (len(ts) - 1))]).total_seconds() if len(ts) > 2 else 0.0
     rep.data["footprint"] = {"receipts": len(rows), "extent_km": extent, "carriers": carriers,
-                             "channels": channels, "distinct_digests": len(digests), "t_spread_p5_p95_s": spread}
+                             "channels": channels, "distinct_digests": len(digests), "t_spread_p5_p95_s": spread,
+                             "min_local_receipts": min_local}
     rep.flag("B1", "INFO", f"{len(rows)} receipts spanning {extent:.0f} km; carriers {carriers or '—'}; "
              f"channels {channels}; 90 % of receipts within {spread:.1f} s.")
     if len(digests) > 1:
         rep.flag("B2", "FLAG", f"{len(digests)} different message texts in circulation — content diverged "
                  "somewhere in distribution. Compare each against the agency text.")
+    # Asymmetry on purpose: a WIDE footprint is positive evidence and a handful of receipts can show it.
+    # A NARROW footprint is an absence of spread, and every small sample looks narrow — so a local
+    # verdict needs a minimum number of receipts.
     non_cbs = [c for c in channels if c not in ("cbs", "")]
     if extent >= 150 or (len(carriers) >= 2 and extent >= 50) or non_cbs:
         why = []
@@ -180,8 +184,13 @@ def check_footprint(rows, rep: L.Report) -> str:
                  "control of broadcast TV/J-ALERT. The common point is upstream of the carriers.")
         return "NATIONAL"
     if extent <= 30 and len(carriers) <= 1 and set(channels) <= {"cbs"}:
-        rep.flag("B3", "FLAG", f"LOCAL pattern: {extent:.1f} km, single carrier, cell broadcast only. "
-                 "Consistent with a rogue base station (fake eNB/gNB) broadcasting ETWS/CMAS.")
+        if len(rows) < min_local:
+            rep.flag("B3", "INFO", f"Only {len(rows)} receipt(s), all close together — too few to call the footprint "
+                     f"local (need ≥{min_local}). A small sample always looks local. Collect more receipts, "
+                     "including from people on other carriers nearby who did NOT receive it.")
+            return "INDETERMINATE"
+        rep.flag("B3", "FLAG", f"LOCAL pattern: {len(rows)} receipts within {extent:.1f} km, single carrier, cell "
+                 "broadcast only. Consistent with a rogue base station (fake eNB/gNB) broadcasting ETWS/CMAS.")
         cells = sorted({r['cell'] for r in rows if r['cell']})
         if cells:
             rep.flag("B4", "INFO", f"Cell IDs reported: {cells[:12]}{' …' if len(cells) > 12 else ''}. "
@@ -195,9 +204,6 @@ def check_footprint(rows, rep: L.Report) -> str:
     rep.flag("B3", "INFO", "Footprint neither clearly national nor clearly local. Collect more receipts "
              "(other carriers, TV/J-ALERT logs) before concluding.")
     return "INDETERMINATE"
-
-
-# ---------------------------------------------------------------- C. physics
 def fetch_usgs(alert: L.Alert, minmag=4.0) -> dict:
     t0 = alert.origin_time or alert.detected_at or alert.issued_at
     if t0 is None:
@@ -211,8 +217,7 @@ def fetch_usgs(alert: L.Alert, minmag=4.0) -> dict:
 
 
 def load_catalog(path) -> dict:
-    with open(path, encoding="utf-8") as f:
-        return json.load(f)
+    return json.loads(L.read_text(path))
 
 
 def catalog_events(geo: dict) -> list[dict]:
@@ -252,22 +257,36 @@ def check_physics(alert: L.Alert, geo: dict | None, points, tt: L.TravelTimes, r
     rep.flag("C1", "INFO", f"Independent catalogue: M{ev['mag']} {ev['magType'] or ''} — {ev['place']} — "
              f"{ev['hypo']} at {L.fmt_time(ev['time'])} ({ev['id']}).")
 
-    physics = "CONSISTENT"
-    if alert.magnitude is not None and alert.h_int:
+    # Compare whatever the alert actually carries. Nothing compared → NOT_CHECKED, never "consistent".
+    physics, compared, disagree = "NOT_CHECKED", [], []
+    disc = {}
+    if alert.magnitude is not None and ev["mag"] is not None:
+        dM = alert.magnitude - ev["mag"]
+        disc |= {"dM": dM, "energy_ratio": 10 ** (1.5 * dM)}
+        compared.append("magnitude")
+        if abs(dM) >= 1.0:
+            disagree.append(f"ΔM = {dM:+.1f} (≈{10 ** (1.5 * dM):,.0f}× the energy)")
+    if alert.h_int:
         sep = float(L.gc_km(alert.h_int.lat, alert.h_int.lon, ev["hypo"].lat, ev["hypo"].lon))
-        dM = alert.magnitude - (ev["mag"] or 0)
-        energy = 10 ** (1.5 * dM)
-        rep.data["discrepancy"] = {"epicentre_sep_km": sep, "dM": dM, "energy_ratio": energy}
-        if sep > 100 or abs(dM) >= 1.0:
-            physics = "REAL_EVENT_WRONG_PARAMETERS"
-            rep.flag("C2", "FLAG", f"Alert parameters disagree with the real event: epicentre {sep:.0f} km away, "
-                     f"ΔM = {dM:+.1f} (≈{energy:,.0f}× the energy). The event is real; the alert's description of it is not.")
-        else:
-            rep.flag("C2", "PASS", f"Alert parameters within {sep:.0f} km / ΔM {dM:+.1f} of the catalogue.")
-        if alert.magnitude >= 9.6:
-            rep.flag("C3", "FLAG", f"M{alert.magnitude} exceeds the largest instrumentally recorded earthquake "
-                     "(Chile 1960, Mw 9.5). Physically possible in principle, but as a prior it marks an estimator "
-                     "operating outside its envelope.")
+        disc["epicentre_sep_km"] = sep
+        compared.append("location")
+        if sep > 100:
+            disagree.append(f"epicentre {sep:.0f} km away")
+    rep.data["discrepancy"] = disc | {"compared": compared}
+    if disagree:
+        physics = "REAL_EVENT_WRONG_PARAMETERS"
+        rep.flag("C2", "FLAG", "Alert parameters disagree with the real event: " + "; ".join(disagree) +
+                 ". The event is real; the alert's description of it is not.")
+    elif compared:
+        physics = "CONSISTENT"
+        rep.flag("C2", "PASS", f"Alert agrees with the catalogue on {' and '.join(compared)}"
+                 + ("" if len(compared) == 2 else f" (alert carries no {'location' if 'location' not in compared else 'magnitude'})") + ".")
+    else:
+        rep.flag("C2", "N/A", "Alert carries neither a magnitude nor a hypocentre — nothing to compare.")
+    if alert.magnitude is not None and alert.magnitude >= 9.6:
+        rep.flag("C3", "FLAG", f"M{alert.magnitude} exceeds the largest instrumentally recorded earthquake "
+                 "(Chile 1960, Mw 9.5). Physically possible in principle, but as a prior it marks an estimator "
+                 "operating outside its envelope.")
 
     timing = "NOT_CHECKED"
     if alert.detected_at:
@@ -286,22 +305,29 @@ def check_physics(alert: L.Alert, geo: dict | None, points, tt: L.TravelTimes, r
         if not tt.exact:
             rep.flag("C4", "INFO", "Travel times from the crude fallback model — install obspy to rely on C4.")
     return physics, timing
+VERDICTS = {
+    "LOCAL_INJECTION": "LOCAL RADIO-LAYER INJECTION — candidate",
+    "DISTRIBUTION_ALTERED": "CONTENT ALTERED IN DISTRIBUTION — investigate the chain between agency and receivers",
+    "PROCESSING_FAULT": "AUTHENTIC UPSTREAM ALERT, WRONG CONTENT — processing-fault class",
+    "UPSTREAM_FALSE_TRIGGER": "UPSTREAM FALSE TRIGGER (no real event) — sensor/telemetry fault or upstream compromise",
+    "CONSISTENT": "CONSISTENT ALERT — no anomaly found in what was checked",
+    "INDETERMINATE": "INDETERMINATE — the evidence supplied does not support a conclusion",
+}
 
 
-# ------------------------------------------------------------------ verdict
-def verdict(auth, foot, phys, timing, rep: L.Report):
+def verdict(auth, foot, phys, timing, rep: L.Report, compared=()):
     rep.h("Verdict")
-    v, why, overturn = "INDETERMINATE", [], []
+    code, why, overturn = "INDETERMINATE", [], []
     if foot == "LOCAL" and auth in ("ABSENT", "MISMATCH", "NOT_CHECKED"):
-        v = "LOCAL RADIO-LAYER INJECTION — candidate"
-        why = ["receipts confined to a small area on one carrier, cell broadcast only"]
+        code = "LOCAL_INJECTION"
+        why = ["enough receipts, all confined to a small area on one carrier, cell broadcast only"]
         overturn = ["the agency record contains the same alert", "receipts from other carriers/channels or regions"]
-    elif auth == "MISMATCH" and foot in ("NATIONAL", "NOT_CHECKED"):
-        v = "CONTENT ALTERED IN DISTRIBUTION — investigate the chain between agency and receivers"
+    elif auth == "MISMATCH" and foot in ("NATIONAL", "NOT_CHECKED", "INDETERMINATE"):
+        code = "DISTRIBUTION_ALTERED"
         why = ["what people received differs from what the agency published"]
         overturn = ["the difference is a transcription error in the received copy"]
     elif auth in ("MATCH", "NOT_CHECKED") and phys == "REAL_EVENT_WRONG_PARAMETERS" and timing in ("CONSISTENT", "NOT_CHECKED"):
-        v = "AUTHENTIC UPSTREAM ALERT, WRONG CONTENT — processing-fault class"
+        code = "PROCESSING_FAULT"
         why = ["a real earthquake occurred", "the alert describes it wrongly"]
         if timing == "CONSISTENT": why.append("the agency's trigger time equals that earthquake's P arrival")
         if auth == "MATCH": why.append("the agency's own record carries the same content")
@@ -310,48 +336,63 @@ def verdict(auth, foot, phys, timing, rep: L.Report):
                     "which needs station-level data; run eew_diagnose.py",
                     "unexplained changes to the EEW software/configuration before the event (change-management logs)"]
     elif phys == "NO_PHYSICAL_EVENT" and auth in ("MATCH", "NOT_CHECKED"):
-        v = "UPSTREAM FALSE TRIGGER (no real event) — sensor/telemetry fault or upstream compromise"
+        code = "UPSTREAM_FALSE_TRIGGER"
         why = ["agency issued it", "no earthquake in an independent catalogue"]
         overturn = ["a late catalogue entry", "station-level data showing a single faulty sensor "
                     "(cf. JMA 2016-08-01 Futtsu power-supply fault; 2013-08-08 seafloor timestamp fault)"]
-    elif phys == "CONSISTENT":
-        v = "CONSISTENT ALERT — no anomaly found"
-        why = ["parameters agree with an independent catalogue"]
-    rep.p(f"  {v}")
+    elif phys == "CONSISTENT" and timing != "INCONSISTENT" and auth != "MISMATCH":
+        code = "CONSISTENT"
+        why = [f"agrees with an independent catalogue on {' and '.join(compared) or '—'}"]
+        if "location" not in compared: overturn.append("the alert's location, once known, disagrees")
+    else:
+        why = [f"authority={auth}, footprint={foot}, physics={phys}, timing={timing}"]
+        if timing == "INCONSISTENT":
+            why.append("the agency's trigger time does not match the catalogue event's P arrival")
+        overturn = ["more evidence on whichever axis is NOT_CHECKED or INDETERMINATE"]
+    rep.p(f"  {VERDICTS[code]}")
     for w in why: rep.p(f"    because: {w}")
     for o in overturn: rep.p(f"    would change if: {o}")
-    rep.data["verdict"] = {"verdict": v, "because": why, "would_change_if": overturn,
+    rep.data["verdict"] = {"code": code, "verdict": VERDICTS[code], "because": why, "would_change_if": overturn,
                            "axes": {"authority": auth, "footprint": foot, "physics": phys, "timing": timing}}
 
 
-def main(argv=None):
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--alert", required=True, help="alert as received (normalised JSON or JMA XML)")
     ap.add_argument("--authority", nargs="*", default=[], help="agency record(s): JMA XML or JSON")
     ap.add_argument("--receipts", help="CSV of receipt observations")
+    ap.add_argument("--min-local-receipts", type=int, default=10,
+                    help="receipts needed before a footprint can be called local (default 10)")
     ap.add_argument("--catalog", help="independent catalogue, USGS GeoJSON")
     ap.add_argument("--fetch-usgs", action="store_true", help="query the USGS FDSN event service")
     ap.add_argument("--stations", help="CSV station,lat,lon — the agency's sensors (default: reference points)")
     ap.add_argument("--json", help="write machine-readable report here")
-    a = ap.parse_args(argv)
+    return ap
 
+
+def main(argv=None):
+    a = build_parser().parse_args(argv)
     alert = L.load_alert(a.alert)
     rep = L.Report()
-    rep.p(f"Alert: {alert.source} {alert.region} M{alert.magnitude} at {alert.h_int} — issued "
-          f"{L.fmt_time(alert.issued_at)} (serial {alert.serial}, detected {L.fmt_time(alert.detected_at)})")
+    rep.p(f"Alert: {alert.source} {alert.region} M{alert.magnitude if alert.magnitude is not None else '?'} at "
+          f"{alert.h_int or 'no hypocentre'} — issued {L.fmt_time(alert.issued_at)} (serial {alert.serial}, "
+          f"detected {L.fmt_time(alert.detected_at)})")
+    for n in alert.notes:
+        rep.p(f"  note: {n}")
     rep.data["alert"] = alert.to_dict()
 
     auth = check_authority(alert, a.authority, rep)
-    foot = check_footprint(load_receipts(a.receipts) if a.receipts else [], rep)
+    foot = check_footprint(load_receipts(a.receipts) if a.receipts else [], rep, a.min_local_receipts)
     geo = load_catalog(a.catalog) if a.catalog else (fetch_usgs(alert) if a.fetch_usgs else None)
     points = L.load_points_csv(a.stations) if a.stations else L.JAPAN_REFERENCE_POINTS
     tt = L.TravelTimes(quiet=False)
     phys, timing = check_physics(alert, geo, points, tt, rep)
-    verdict(auth, foot, phys, timing, rep)
+    verdict(auth, foot, phys, timing, rep, rep.data.get("discrepancy", {}).get("compared", ()))
 
     sys.stdout.write(rep.text())
     if a.json:
         L.write_json(a.json, rep.data)
+    return rep.data
 
 
 if __name__ == "__main__":

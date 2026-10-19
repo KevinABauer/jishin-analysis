@@ -188,7 +188,7 @@ class TravelTimes:
         if self._interp is not None:
             pts = np.stack([np.clip(dist_km / 111.195, 0, self.DIST_DEG[-1]),
                             np.clip(depth, 0, self.DEPTH_KM[-1])], axis=-1)
-            return self._interp(pts)
+            return np.asarray(self._interp(pts)).reshape(dist_km.shape)
         r = hypo_km(dist_km, depth)                           # crude fallback
         return np.where(r < 150, r / 6.0, 150 / 6.0 + (r - 150) / 8.0)
 
@@ -379,17 +379,30 @@ def parse_jma_coordinate(s: str) -> tuple[float, float, float] | None:
     return lat, lon, depth
 
 
+def _num_or_none(v):
+    """A finite float, or None for missing / NaN / unparseable values."""
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    return f if math.isfinite(f) else None
+
+
+def read_text(path) -> str:
+    """Read UTF-8 text, tolerating a byte-order mark."""
+    return Path(path).read_text(encoding="utf-8-sig")
+
+
 def load_alert(path: str | Path) -> Alert:
     """Load an alert from normalised JSON or from JMA 防災情報XML (VXSE43/44/45)."""
-    p = Path(path)
-    text = p.read_text(encoding="utf-8")
+    text = read_text(path)
     if text.lstrip().startswith("{"):
         d = json.loads(text)
         return Alert(
-            source=d.get("source", ""), event_id=str(d.get("event_id", "")), serial=d.get("serial"),
+            source=d.get("source", ""), event_id=str(d.get("event_id", "") or ""), serial=d.get("serial"),
             info_type=d.get("info_type", ""), issued_at=parse_time(d.get("issued_at")),
             detected_at=parse_time(d.get("detected_at")), origin_time=parse_time(d.get("origin_time")),
-            magnitude=d.get("magnitude"), hypocenter=Hypo.from_dict(d.get("hypocenter"), "alert"),
+            magnitude=_num_or_none(d.get("magnitude")), hypocenter=Hypo.from_dict(d.get("hypocenter"), "alert"),
             hypocenter_magnitude=Hypo.from_dict(d.get("hypocenter_magnitude"), "alert-M"),
             region=d.get("region", ""), message_digest=d.get("message_digest", ""), notes=d.get("notes", []))
     root = ET.fromstring(text)
@@ -405,15 +418,20 @@ def load_alert(path: str | Path) -> Alert:
         nm = _find(hyp, "Name"); a.region = nm.text.strip() if nm is not None and nm.text else ""
         for c in _find_all(hyp, "Coordinate"):
             xy = parse_jma_coordinate(c.text or "")
-            if xy and (c.get("type", "").find("日本測地系") < 0):
+            if xy and "日本測地系" not in c.get("type", ""):
                 a.hypocenter = Hypo(*xy, time=a.origin_time, label="alert")
                 break
-    for m in _find_all(root, "Magnitude"):
-        try:
-            a.magnitude = float(m.text)
-            break
-        except (TypeError, ValueError):
-            continue
+    mags = _find_all(root, "Magnitude")
+    if mags:
+        m = mags[0]
+        # JMA writes an undetermined magnitude as condition="不明" with the text "NaN".
+        cond = (m.get("condition") or "").strip()
+        v = _num_or_none(m.text)
+        if cond or v is None:
+            a.magnitude = None
+            a.notes.append(f"magnitude not determined (condition={cond or '—'}, description={m.get('description', '')})")
+        else:
+            a.magnitude = v
     return a
 
 
@@ -472,7 +490,7 @@ JAPAN_REFERENCE_POINTS = {
 def load_points_csv(path: str | Path) -> dict[str, tuple[float, float]]:
     import csv
     out = {}
-    with open(path, newline="", encoding="utf-8") as f:
+    with open(path, newline="", encoding="utf-8-sig") as f:
         for r in csv.DictReader(f):
             out[r.get("station") or r.get("name")] = (float(r["lat"]), float(r["lon"]))
     return out

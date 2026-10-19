@@ -1,15 +1,17 @@
-Stations: 28   P-time reference: 2026-10-16 12:38:08.2 JST
+Stations: 28   P-time reference: 2026-10-16 12:38:09.1 JST
 Relation: eew_illustrative: log10A = 0.72·M -1.2·log10R -0.002·R +1.69 [R=hypo, A µm, calibrated to 700 km]
           ILLUSTRATIVE coefficients — shape only, not an agency's formula.
 Travel times: IASP91 (TauP)
 Alert: M9.9  intensity hypocentre 48.200°N 153.400°E 140 km  magnitude hypocentre 56.620°N 164.130°E 140 km
+  note: serial/issue/detection time, hypocentre 48.2N 153.4E 140 km and M9.9 are as published on JMA's 緊急地震速報(警報)発表状況 page for this event
+  note: hypocenter_magnitude is a RECONSTRUCTION: JMA stated M was computed ~680 km farther from Japan than the true source; exact coordinates not published
 
 Independent location from P picks
 ─────────────────────────────────
-  52.080°N 157.623°E 115 km  origin 2026-10-16 12:35:27.0 JST  mean |residual| 0.23 s
+  52.080°N 157.623°E 115 km  origin 2026-10-16 12:35:27.9 JST  mean |residual| 0.23 s
   near-best region spans 480 km, elongated along bearing 46°/226°
   reference catalogue: 51.985°N 157.270°E 135 km → independent solution is 26 km from it
-  magnitude: not computed — nearest station 1284 km is beyond eew_illustrative's calibrated 700 km. Use the catalogue/teleseismic Mw for this event.
+  magnitude: not computed — nearest station 1284 km is beyond eew_illustrative's calibrated 700 km, or no usable amplitudes. Use the catalogue/teleseismic Mw for this event.
 
 D1 · Location — do the picks support the alert's hypocentres?
 ─────────────────────────────────────────────────────────────
@@ -68,12 +70,16 @@ D7 · Single-sensor control (leave-one-out)
 D8 · Outlier picks
 ──────────────────
   [D8] ✓ pass  all picks within ±2.0 s of the independent solution.
+  [D8] ✓ pass  all picks within ±10 s of the P times predicted by the reference origin.
 
 Summary — failure classes supported by the data
 ───────────────────────────────────────────────
   • Out-of-network event: location under-determined along the back-azimuth (relation-independent).
+  • With only the first few picks, the alert's hypocentre fits as well as the true one (relation-independent).
   • Magnitude used stations beyond the 700 km safeguard (relation-independent).
   • Magnitude and intensity stages used different hypocentres (relation-independent).
+  • Magnitude above any instrumentally recorded event — a plausibility ceiling should have stopped it.
+  • Magnitude far from the reference event's (≥1 unit).
   • Intensity over-prediction follows from the M/location inputs; the intensity model itself behaves.
 
   Not determinable from station data alone: whether a safeguard failed through a code regression,

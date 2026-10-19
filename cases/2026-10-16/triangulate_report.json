@@ -65,12 +65,12 @@
     {
       "code": "C1",
       "status": "INFO",
-      "message": "Independent catalogue: M6.9 mww — 76 km NE of Ozernovskiy, Russia — 51.985°N 157.270°E 135 km at 2026-10-16 12:35:31.0 JST (fixture-kamchatka-20261016)."
+      "message": "Independent catalogue: M6.9 mww — 76 km NE of Ozernovskiy, Russia — 51.985°N 157.270°E 135 km at 2026-10-16 12:35:31.9 JST (fixture-kamchatka-20261016)."
     },
     {
       "code": "C2",
       "status": "FLAG",
-      "message": "Alert parameters disagree with the real event: epicentre 503 km away, ΔM = +3.0 (≈31,623× the energy). The event is real; the alert's description of it is not."
+      "message": "Alert parameters disagree with the real event: ΔM = +3.0 (≈31,623× the energy); epicentre 503 km away. The event is real; the alert's description of it is not."
     },
     {
       "code": "C3",
@@ -80,7 +80,7 @@
     {
       "code": "C4",
       "status": "PASS",
-      "message": "Agency detection 2026-10-16 12:38:10.1 JST vs. real event's P wave first reaching the network (Shiretoko/Rausu, 1259 km, 157.6 s travel) at 2026-10-16 12:38:08.6 JST: lag +1.5 s. The trigger WAS that earthquake's P wave."
+      "message": "Agency detection 2026-10-16 12:38:10.1 JST vs. real event's P wave first reaching the network (Shiretoko/Rausu, 1259 km, 157.6 s travel) at 2026-10-16 12:38:09.5 JST: lag +0.6 s. The trigger WAS that earthquake's P wave."
     }
   ],
   "footprint": {
@@ -97,35 +97,41 @@
       "tv"
     ],
     "distinct_digests": 1,
-    "t_spread_p5_p95_s": 3.024835
+    "t_spread_p5_p95_s": 3.024835,
+    "min_local_receipts": 10
   },
   "catalog_event": {
     "id": "fixture-kamchatka-20261016",
     "mag": 6.9,
     "magType": "mww",
     "place": "76 km NE of Ozernovskiy, Russia",
-    "time": "2026-10-16T03:35:31+00:00",
+    "time": "2026-10-16T03:35:31.900000+00:00",
     "hypo": {
       "lat": 51.985,
       "lon": 157.27,
       "depth_km": 135.0,
-      "time": "2026-10-16T03:35:31+00:00"
+      "time": "2026-10-16T03:35:31.900000+00:00"
     }
   },
   "discrepancy": {
-    "epicentre_sep_km": 503.1773311381991,
     "dM": 3.0,
-    "energy_ratio": 31622.776601683792
+    "energy_ratio": 31622.776601683792,
+    "epicentre_sep_km": 503.1773311381991,
+    "compared": [
+      "magnitude",
+      "location"
+    ]
   },
   "timing": {
     "first_point": "Shiretoko/Rausu",
     "distance_km": 1258.727669946257,
     "p_travel_s": 157.6483292737157,
-    "predicted_first_p": "2026-10-16T03:38:08.648329+00:00",
+    "predicted_first_p": "2026-10-16T03:38:09.548329+00:00",
     "agency_detected": "2026-10-16T03:38:10.100000+00:00",
-    "lag_s": 1.451671
+    "lag_s": 0.551671
   },
   "verdict": {
+    "code": "PROCESSING_FAULT",
     "verdict": "AUTHENTIC UPSTREAM ALERT, WRONG CONTENT — processing-fault class",
     "because": [
       "a real earthquake occurred",
