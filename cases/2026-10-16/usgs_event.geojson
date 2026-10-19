@@ -1,7 +1,7 @@
 {
   "type": "FeatureCollection",
   "metadata": {
-    "note": "fixture in USGS GeoJSON shape; values from USGS reporting"
+    "note": "USGS GeoJSON 形式の検証用データ。値は USGS の公表による"
   },
   "features": [
     {

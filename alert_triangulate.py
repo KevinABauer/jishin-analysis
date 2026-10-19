@@ -1,36 +1,35 @@
 #!/usr/bin/env python3
 """
-alert_triangulate.py — where did this alert actually come from?
+alert_triangulate.py ― その速報は、どこから来たのか
 
-"Triangulates" an earthquake alert along three independent axes, each of which can
-separate an upstream processing error from a forged or injected message:
+地震の速報を、互いに独立した3つの観点から「三角測量」します。どの観点でも、発表機関側の
+処理誤りと、偽造・注入された速報とを切り分けられます。
 
-  A. AUTHORITY   Does the received alert match the issuing agency's own record?
-                 (JMA 防災情報XML, the JMA EEW history page, or a JSON transcription.)
-  B. FOOTPRINT   Who received it, where, over which carriers and channels?
-                 A rogue LTE base station spoofing cell broadcast (ETWS/CMAS) reaches a
-                 few km on the carriers it impersonates. An upstream alert reaches every
-                 carrier, TV, radio and J-ALERT across the warned prefectures at once.
-                 If the footprint is local, the transmitter is multilaterated from RSSI.
-  C. PHYSICS     Is there a real earthquake behind it? Compared against an independent
-                 catalogue (USGS by default), and — the strongest single test — whether
-                 the agency's "wave detected" time equals the moment the real event's
-                 P wave first reached the agency's network.
+  A. 発表元    受信した速報は、発表機関自身の記録と一致するか
+               （気象庁防災情報XML、気象庁の緊急地震速報の発表履歴ページ、またはその JSON 書き起こし）
+  B. 受信範囲  誰が、どこで、どの事業者・どの経路で受け取ったか
+               偽基地局がセルブロードキャスト（ETWS）を偽装しても、届くのは成りすました事業者の
+               数km圏内だけ。発表機関から出た速報は、警報対象の都道府県全域で全事業者・テレビ・
+               ラジオ・Jアラートに同時に届く。範囲が局所的なら、受信強度から送信源の位置を推定する。
+  C. 物理      その速報の裏に実際の地震があるか
+               独立した地震カタログ（既定は USGS）と照合し、さらに最も強力な単独の検証として、
+               発表機関の「地震波検知時刻」が、実際の地震の P 波が観測網に最初に届いた時刻と
+               一致するかを確かめる。
 
-Usage
-  python alert_triangulate.py --alert alert.json [--authority jma.xml ...]
-         [--receipts receipts.csv] [--catalog usgs.geojson | --fetch-usgs]
-         [--stations stations.csv] [--json report.json]
+使い方
+  python alert_triangulate.py --alert 速報.json [--authority 気象庁.xml ...]
+         [--receipts 受信記録.csv] [--catalog usgs.geojson | --fetch-usgs]
+         [--stations 観測点.csv] [--json 結果.json]
 
-receipts.csv columns: received_at,lat,lon,carrier,channel[,rssi_dbm,cell_id,message_digest]
-  channel ∈ cbs | tv | radio | jalert | app | other
+受信記録 CSV の列（英語・日本語どちらの列名でも可、UTF-8 / Shift_JIS 自動判別）
+  受信時刻, 緯度, 経度, 事業者, 経路 [, 受信強度_dbm, セルID, 本文ハッシュ]
+  経路: エリアメール（緊急速報メール）/ テレビ / ラジオ / Jアラート / アプリ / その他
 
-No judgement here is certain; each verdict states what evidence would overturn it.
+いずれの判定も確定ではありません。各結論には「何が分かれば覆るか」を併記します。
 """
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 import math
 import sys
@@ -42,20 +41,23 @@ import numpy as np
 
 import eewlib as L
 
+CH_JA = {"cbs": "エリアメール等", "tv": "テレビ", "radio": "ラジオ", "jalert": "Jアラート", "app": "アプリ", "other": "その他"}
+CA_JA = {"docomo": "ドコモ", "au": "au", "softbank": "ソフトバンク", "rakuten": "楽天モバイル"}
 
-# ------------------------------------------------------------- A. authority
+
+# ------------------------------------------------------------------ A. 発表元
 def check_authority(alert: L.Alert, auth_paths: list[str], rep: L.Report) -> str:
-    rep.h("A · Authority — does the agency's own record contain this alert?")
+    rep.h("A ・ 発表元 ― 発表機関自身の記録にこの速報はあるか")
     if not auth_paths:
-        rep.flag("A0", "N/A", "No authoritative record supplied (--authority). JMA publishes EEW (warning) "
-                 "content on its 緊急地震速報(警報)発表状況 pages and in 防災情報XML (VXSE43).")
+        rep.flag("A0", "N/A", "発表機関の記録が指定されていません（--authority）。気象庁は緊急地震速報（警報）の内容を"
+                 "「緊急地震速報（警報）発表状況」ページと防災情報XML（VXSE43）で公開しています。")
         return "NOT_CHECKED"
     best, best_score = None, -1e9
     for p in auth_paths:
         try:
             a = L.load_alert(p)
         except Exception as e:  # noqa: BLE001
-            rep.flag("A1", "INFO", f"could not parse {p}: {e}")
+            rep.flag("A1", "INFO", f"{p} を読み込めませんでした: {e}")
             continue
         score = 0.0
         if alert.event_id and a.event_id and alert.event_id == a.event_id: score += 5
@@ -69,58 +71,55 @@ def check_authority(alert: L.Alert, auth_paths: list[str], rep: L.Report) -> str
         if score > best_score:
             best, best_score = a, score
     if best is None:
-        rep.flag("A1", "FLAG", "No parseable authoritative record.")
+        rep.flag("A1", "FLAG", "読み込める発表機関の記録がありません。")
         return "ABSENT"
 
     diffs = []
     if alert.magnitude is not None and best.magnitude is not None and abs(alert.magnitude - best.magnitude) > 0.05:
-        diffs.append(f"M {alert.magnitude} vs agency {best.magnitude}")
+        diffs.append(f"M{alert.magnitude}（機関の記録は M{best.magnitude}）")
     if alert.h_int and best.h_int:
         sep = float(L.gc_km(alert.h_int.lat, alert.h_int.lon, best.h_int.lat, best.h_int.lon))
-        if sep > 15 or abs(alert.h_int.depth_km - best.h_int.depth_km) > 15:
-            diffs.append(f"hypocentre differs by {sep:.0f} km / {abs(alert.h_int.depth_km - best.h_int.depth_km):.0f} km depth")
+        ddep = abs(alert.h_int.depth_km - best.h_int.depth_km)
+        if sep > 15 or ddep > 15:
+            diffs.append(f"震源が {sep:.0f}km、深さが {ddep:.0f}km 異なる")
     if alert.issued_at and best.issued_at:
         dt = (alert.issued_at - best.issued_at).total_seconds()
         if abs(dt) > 60:
-            diffs.append(f"issue time differs by {dt:+.0f} s")
+            diffs.append(f"発表時刻が {dt:+.0f} 秒異なる")
     rep.data["authority_record"] = best.to_dict()
     if diffs:
-        rep.flag("A2", "FLAG", "Alert does NOT match the agency record: " + "; ".join(diffs))
+        rep.flag("A2", "FLAG", "受信した速報は発表機関の記録と一致しません: " + "、".join(diffs))
         return "MISMATCH"
-    rep.flag("A2", "PASS", f"Alert matches the agency record (M{best.magnitude}, {best.h_int}, "
-             f"issued {L.fmt_time(best.issued_at)}). The agency itself published this content.")
+    rep.flag("A2", "PASS", f"発表機関の記録と一致します（M{best.magnitude}、{best.h_int}、"
+             f"発表 {L.fmt_time(best.issued_at)}）。この内容は発表機関自身が出したものです。")
     return "MATCH"
 
 
-# ------------------------------------------------------------- B. footprint
+# ---------------------------------------------------------------- B. 受信範囲
 def load_receipts(path):
     rows = []
-    with open(path, newline="", encoding="utf-8") as f:
-        for r in csv.DictReader(f):
-            rows.append({
-                "t": L.parse_time(r["received_at"]), "lat": float(r["lat"]), "lon": float(r["lon"]),
-                "carrier": (r.get("carrier") or "").strip().lower(),
-                "channel": (r.get("channel") or "cbs").strip().lower(),
-                "rssi": float(r["rssi_dbm"]) if r.get("rssi_dbm") not in (None, "") else None,
-                "cell": (r.get("cell_id") or "").strip(),
-                "digest": (r.get("message_digest") or "").strip(),
-            })
+    for r in L.read_csv_rows(path):
+        rows.append({
+            "t": L.parse_time(r.get("received_at")), "lat": float(r["lat"]), "lon": float(r["lon"]),
+            "carrier": L.norm_carrier(r.get("carrier", "")), "channel": L.norm_channel(r.get("channel", "")),
+            "rssi": float(r["rssi_dbm"]) if r.get("rssi_dbm") not in (None, "") else None,
+            "cell": r.get("cell_id", ""), "digest": r.get("message_digest", ""),
+        })
     return rows
 
 
 def multilaterate_rssi(rows, rep: L.Report):
     """
-    Log-distance path loss: RSSI = P0 − 10·n·log10(d / 1 m). For every candidate
-    transmitter position on a grid, (P0, n) is solved by linear least squares
-    (n constrained to 1.6–4.5); the best position minimises the residual. The 95 %
-    region uses Δχ² ≤ 5.99 (2 d.o.f.) with σ² estimated from the best fit.
-    Phone-reported RSSI is noisy: treat the result as a search area for a
-    direction-finding team, not a fix.
+    距離減衰モデル: RSSI = P0 − 10・n・log10(d / 1 m)。送信源の候補位置ごとに (P0, n) を
+    線形最小二乗で解き（n は 1.6～4.5 に制限）、残差最小の位置を最良推定とする。95% 範囲は
+    最良解から推定した分散を用い、Δχ2 ≦ 5.99（自由度2）で求める。
+    スマートフォンの受信強度は誤差が大きいので、結果は「位置の確定」ではなく
+    方向探知で絞り込むための探索範囲として扱うこと。
     """
     pts = [r for r in rows if r["rssi"] is not None]
     if len(pts) < 5:
-        rep.flag("B5", "N/A", f"Only {len(pts)} receipts carry RSSI; need ≥5 to multilaterate. "
-                 "Weighted centroid only.")
+        rep.flag("B5", "N/A", f"受信強度のある受信記録が {len(pts)} 件のみです。位置推定には5件以上必要なため、"
+                 "重心のみを示します。")
         return None
     lat0 = float(np.mean([r["lat"] for r in pts])); lon0 = float(np.mean([r["lon"] for r in pts]))
     x, y = L.to_enu_km([r["lat"] for r in pts], [r["lon"] for r in pts], lat0, lon0)
@@ -129,7 +128,7 @@ def multilaterate_rssi(rows, rep: L.Report):
     g = np.linspace(-span, span, 241)
     GX, GY = np.meshgrid(g, g)
     d_m = np.sqrt((GX[..., None] - x) ** 2 + (GY[..., None] - y) ** 2) * 1000 + 10.0
-    X = -10 * np.log10(d_m)                                      # regressor for n
+    X = -10 * np.log10(d_m)
     Xm, Ym = X.mean(-1, keepdims=True), rssi.mean()
     n = ((X - Xm) * (rssi - Ym)).sum(-1) / np.maximum(((X - Xm) ** 2).sum(-1), 1e-9)
     n = np.clip(n, 1.6, 4.5)
@@ -143,15 +142,15 @@ def multilaterate_rssi(rows, rep: L.Report):
     radius = max(float(np.sqrt(((rx - GX[k]) ** 2 + (ry - GY[k]) ** 2).max())) if rx.size else 0.0, float(g[1] - g[0]))
     res = {"lat": float(blat), "lon": float(blon), "radius95_km": radius, "path_loss_exponent": float(n[k]),
            "p0_dbm_at_1m": float(P0[k]), "rms_db": float(math.sqrt(sigma2)), "n_used": len(pts)}
-    rep.flag("B5", "INFO", f"Transmitter estimate {blat:.5f}°N {blon:.5f}°E, 95 % region radius ≈ {radius:.2f} km "
-             f"(path-loss exponent {n[k]:.2f}, fit RMS {math.sqrt(sigma2):.1f} dB, {len(pts)} receipts).")
+    rep.flag("B5", "INFO", f"送信源の推定位置 {L.latlon_ja(float(blat), float(blon), 5)}、95% 範囲の半径 約{radius:.2f}km"
+             f"（距離減衰係数 {n[k]:.2f}、残差 RMS {math.sqrt(sigma2):.1f}dB、受信記録 {len(pts)} 件）。")
     return res
 
 
 def check_footprint(rows, rep: L.Report) -> str:
-    rep.h("B · Footprint — what does the distribution pattern say about the origin?")
+    rep.h("B ・ 受信範囲 ― 届き方から見た発信元")
     if not rows:
-        rep.flag("B0", "N/A", "No receipts supplied (--receipts).")
+        rep.flag("B0", "N/A", "受信記録が指定されていません（--receipts）。")
         return "NOT_CHECKED"
     lat = np.array([r["lat"] for r in rows]); lon = np.array([r["lon"] for r in rows])
     idx = np.random.default_rng(0).choice(len(rows), size=min(len(rows), 1500), replace=False)
@@ -164,44 +163,46 @@ def check_footprint(rows, rep: L.Report) -> str:
     spread = (ts[int(0.95 * (len(ts) - 1))] - ts[int(0.05 * (len(ts) - 1))]).total_seconds() if len(ts) > 2 else 0.0
     rep.data["footprint"] = {"receipts": len(rows), "extent_km": extent, "carriers": carriers,
                              "channels": channels, "distinct_digests": len(digests), "t_spread_p5_p95_s": spread}
-    rep.flag("B1", "INFO", f"{len(rows)} receipts spanning {extent:.0f} km; carriers {carriers or '—'}; "
-             f"channels {channels}; 90 % of receipts within {spread:.1f} s.")
+    ca = "、".join(CA_JA.get(c, c) for c in carriers) or "－"
+    ch = "、".join(CH_JA.get(c, c) for c in channels)
+    rep.flag("B1", "INFO", f"受信記録 {len(rows)} 件、広がり {extent:.0f}km。事業者: {ca}。経路: {ch}。"
+             f"受信時刻の 90% が {spread:.1f} 秒の幅に収まる。")
     if len(digests) > 1:
-        rep.flag("B2", "FLAG", f"{len(digests)} different message texts in circulation — content diverged "
-                 "somewhere in distribution. Compare each against the agency text.")
+        rep.flag("B2", "FLAG", f"本文が {len(digests)} 種類出回っています。配信のどこかで内容が分かれています。"
+                 "それぞれを発表機関の文面と照合してください。")
     non_cbs = [c for c in channels if c not in ("cbs", "")]
     if extent >= 150 or (len(carriers) >= 2 and extent >= 50) or non_cbs:
         why = []
-        if extent >= 150: why.append(f"{extent:.0f} km extent")
-        if len(carriers) >= 2: why.append(f"{len(carriers)} independent carriers")
-        if non_cbs: why.append(f"non-cellular channels {non_cbs}")
-        rep.flag("B3", "PASS", "NATIONAL pattern (" + ", ".join(why) + "). A radio-layer spoof cannot produce "
-                 "this: it would need simultaneous rogue cells on every carrier across hundreds of km, plus "
-                 "control of broadcast TV/J-ALERT. The common point is upstream of the carriers.")
+        if extent >= 150: why.append(f"広がり {extent:.0f}km")
+        if len(carriers) >= 2: why.append(f"独立した {len(carriers)} 事業者")
+        if non_cbs: why.append("携帯以外の経路（" + "、".join(CH_JA.get(c, c) for c in non_cbs) + "）")
+        rep.flag("B3", "PASS", "全国型の届き方です（" + "、".join(why) + "）。無線区間での偽装ではこうはなりません。"
+                 "数百km にわたり全事業者に偽基地局を同時に置き、さらにテレビや Jアラートまで押さえる必要があるため"
+                 "です。共通の発信点は各事業者より上流にあります。")
         return "NATIONAL"
     if extent <= 30 and len(carriers) <= 1 and set(channels) <= {"cbs"}:
-        rep.flag("B3", "FLAG", f"LOCAL pattern: {extent:.1f} km, single carrier, cell broadcast only. "
-                 "Consistent with a rogue base station (fake eNB/gNB) broadcasting ETWS/CMAS.")
-        cells = sorted({r['cell'] for r in rows if r['cell']})
+        rep.flag("B3", "FLAG", f"局所型の届き方です（{extent:.1f}km、単一事業者、エリアメール等のみ）。"
+                 "偽基地局（偽の eNB／gNB）による ETWS の送信と矛盾しません。")
+        cells = sorted({r["cell"] for r in rows if r["cell"]})
         if cells:
-            rep.flag("B4", "INFO", f"Cell IDs reported: {cells[:12]}{' …' if len(cells) > 12 else ''}. "
-                     "IDs absent from the carrier's own cell list are a strong fake-cell indicator.")
+            rep.flag("B4", "INFO", f"報告されたセルID: {cells[:12]}{' …' if len(cells) > 12 else ''}。"
+                     "事業者自身の基地局リストにない ID は、偽基地局を強く示唆します。")
         tx = multilaterate_rssi(rows, rep)
         if tx is None:
-            rep.flag("B5", "INFO", f"Weighted centroid of receipts: {lat.mean():.5f}°N {lon.mean():.5f}°E "
-                     "(weak — the transmitter can sit well outside the receipt cloud).")
+            rep.flag("B5", "INFO", f"受信記録の重心: {L.latlon_ja(float(lat.mean()), float(lon.mean()), 5)}"
+                     "（参考程度。送信源は受信記録の分布の外にあることもあります）。")
         rep.data["transmitter_estimate"] = tx
         return "LOCAL"
-    rep.flag("B3", "INFO", "Footprint neither clearly national nor clearly local. Collect more receipts "
-             "(other carriers, TV/J-ALERT logs) before concluding.")
+    rep.flag("B3", "INFO", "全国型とも局所型とも言い切れません。結論を出す前に、他の事業者・テレビ・Jアラートの"
+             "記録などを追加で集めてください。")
     return "INDETERMINATE"
 
 
-# ---------------------------------------------------------------- C. physics
+# -------------------------------------------------------------------- C. 物理
 def fetch_usgs(alert: L.Alert, minmag=4.0) -> dict:
     t0 = alert.origin_time or alert.detected_at or alert.issued_at
     if t0 is None:
-        raise SystemExit("--fetch-usgs needs an origin/detection/issue time in the alert")
+        raise SystemExit("--fetch-usgs には、速報に発生時刻・検知時刻・発表時刻のいずれかが必要です。")
     q = {"format": "geojson", "minmagnitude": minmag,
          "starttime": (t0 - timedelta(minutes=20)).strftime("%Y-%m-%dT%H:%M:%S"),
          "endtime": (t0 + timedelta(minutes=10)).strftime("%Y-%m-%dT%H:%M:%S")}
@@ -210,37 +211,29 @@ def fetch_usgs(alert: L.Alert, minmag=4.0) -> dict:
         return json.load(r)
 
 
-def load_catalog(path) -> dict:
-    with open(path, encoding="utf-8") as f:
-        return json.load(f)
-
-
 def catalog_events(geo: dict) -> list[dict]:
     out = []
     for ft in geo.get("features", []):
         pr, (lon, lat, dep) = ft["properties"], ft["geometry"]["coordinates"][:3]
+        t = datetime.fromtimestamp(pr["time"] / 1000, tz=timezone.utc)
         out.append({"id": ft.get("id"), "mag": pr.get("mag"), "magType": pr.get("magType"),
-                    "place": pr.get("place"),
-                    "time": datetime.fromtimestamp(pr["time"] / 1000, tz=timezone.utc),
-                    "hypo": L.Hypo(lat, lon, dep, datetime.fromtimestamp(pr["time"] / 1000, tz=timezone.utc), "catalog")})
+                    "place": pr.get("place"), "time": t, "hypo": L.Hypo(lat, lon, dep, t, "カタログ")})
     return out
 
 
 def check_physics(alert: L.Alert, geo: dict | None, points, tt: L.TravelTimes, rep: L.Report) -> tuple[str, str]:
-    rep.h("C · Physics — is there a real earthquake behind the alert?")
+    rep.h("C ・ 物理 ― 速報の裏に実際の地震はあるか")
     if geo is None:
-        rep.flag("C0", "N/A", "No independent catalogue (--catalog or --fetch-usgs).")
+        rep.flag("C0", "N/A", "独立した地震カタログが指定されていません（--catalog または --fetch-usgs）。")
         return "NOT_CHECKED", "NOT_CHECKED"
     evs = catalog_events(geo)
     ref_t = alert.origin_time or alert.detected_at or alert.issued_at
     cands = [e for e in evs if ref_t and timedelta(minutes=-20) <= (e["time"] - ref_t) <= timedelta(minutes=10)]
     if not cands:
-        rep.flag("C1", "FLAG", "No M≥4 event in the independent catalogue within −20/+10 min. Either nothing "
-                 "happened (sensor/telemetry glitch, or fabrication), or the catalogue lags — re-query later.")
+        rep.flag("C1", "FLAG", "前20分～後10分に M4 以上の地震が独立カタログにありません。何も起きていない"
+                 "（センサーや伝送の不具合、または捏造）か、カタログの掲載が遅れているかです。時間をおいて再照会してください。")
         return "NO_PHYSICAL_EVENT", "NOT_CHECKED"
 
-    # Pick the candidate whose P wave reached the network closest to the agency's detection time;
-    # fall back to the largest event.
     def p_arrival(e):
         _, _, t = L.first_arrival_in_network(e["hypo"], tt, points)
         return e["time"] + timedelta(seconds=t)
@@ -249,8 +242,8 @@ def check_physics(alert: L.Alert, geo: dict | None, points, tt: L.TravelTimes, r
     else:
         ev = max(cands, key=lambda e: e["mag"] or 0)
     rep.data["catalog_event"] = {k: v for k, v in ev.items() if k != "hypo"} | {"hypo": ev["hypo"].to_dict()}
-    rep.flag("C1", "INFO", f"Independent catalogue: M{ev['mag']} {ev['magType'] or ''} — {ev['place']} — "
-             f"{ev['hypo']} at {L.fmt_time(ev['time'])} ({ev['id']}).")
+    rep.flag("C1", "INFO", f"独立カタログ: M{ev['mag']}（{ev['magType'] or '－'}）{ev['place']}、"
+             f"{ev['hypo']}、発生 {L.fmt_time(ev['time'])}（{ev['id']}）。")
 
     physics = "CONSISTENT"
     if alert.magnitude is not None and alert.h_int:
@@ -260,14 +253,14 @@ def check_physics(alert: L.Alert, geo: dict | None, points, tt: L.TravelTimes, r
         rep.data["discrepancy"] = {"epicentre_sep_km": sep, "dM": dM, "energy_ratio": energy}
         if sep > 100 or abs(dM) >= 1.0:
             physics = "REAL_EVENT_WRONG_PARAMETERS"
-            rep.flag("C2", "FLAG", f"Alert parameters disagree with the real event: epicentre {sep:.0f} km away, "
-                     f"ΔM = {dM:+.1f} (≈{energy:,.0f}× the energy). The event is real; the alert's description of it is not.")
+            rep.flag("C2", "FLAG", f"速報の震源要素が実際の地震と食い違います。震央は {sep:.0f}km 離れ、"
+                     f"マグニチュードは {dM:+.1f}（エネルギーにして約 {energy:,.0f} 倍）。地震そのものは本物ですが、"
+                     "速報はその地震を正しく表していません。")
         else:
-            rep.flag("C2", "PASS", f"Alert parameters within {sep:.0f} km / ΔM {dM:+.1f} of the catalogue.")
+            rep.flag("C2", "PASS", f"速報の震源要素はカタログと {sep:.0f}km・M差 {dM:+.1f} 以内で一致します。")
         if alert.magnitude >= 9.6:
-            rep.flag("C3", "FLAG", f"M{alert.magnitude} exceeds the largest instrumentally recorded earthquake "
-                     "(Chile 1960, Mw 9.5). Physically possible in principle, but as a prior it marks an estimator "
-                     "operating outside its envelope.")
+            rep.flag("C3", "FLAG", f"M{alert.magnitude} は観測史上最大の地震（1960年チリ地震、Mw 9.5）を上回ります。"
+                     "原理的にあり得ないとは言えませんが、事前の見込みとしては、推定処理が想定外の領域で動いていたことを示します。")
 
     timing = "NOT_CHECKED"
     if alert.detected_at:
@@ -279,73 +272,77 @@ def check_physics(alert: L.Alert, geo: dict | None, points, tt: L.TravelTimes, r
         ok = -5.0 <= lag <= 20.0
         timing = "CONSISTENT" if ok else "INCONSISTENT"
         rep.flag("C4", "PASS" if ok else "FLAG",
-                 f"Agency detection {L.fmt_time(alert.detected_at)} vs. real event's P wave first reaching the "
-                 f"network ({name}, {dkm:.0f} km, {tP:.1f} s travel) at {L.fmt_time(pred)}: lag {lag:+.1f} s. "
-                 + ("The trigger WAS that earthquake's P wave." if ok else
-                    "The trigger does not line up with this event's P arrival — look for another cause."))
+                 f"機関の地震波検知 {L.fmt_time(alert.detected_at)} に対し、実際の地震の P 波が観測網に最初に届く時刻は"
+                 f"{name}（{dkm:.0f}km、走時 {tP:.1f} 秒）で {L.fmt_time(pred)}。差は {lag:+.1f} 秒。"
+                 + ("検知のきっかけは、まさにこの地震の P 波です。" if ok else
+                    "この地震の P 波到達とは合いません。別の原因を探してください。"))
         if not tt.exact:
-            rep.flag("C4", "INFO", "Travel times from the crude fallback model — install obspy to rely on C4.")
+            rep.flag("C4", "INFO", "走時は簡易モデルによるものです。C4 を根拠にするには obspy を入れてください。")
     return physics, timing
 
 
-# ------------------------------------------------------------------ verdict
+# -------------------------------------------------------------------- 総合判定
 def verdict(auth, foot, phys, timing, rep: L.Report):
-    rep.h("Verdict")
-    v, why, overturn = "INDETERMINATE", [], []
+    rep.h("総合判定")
+    v, why, overturn = "判定保留", [], []
     if foot == "LOCAL" and auth in ("ABSENT", "MISMATCH", "NOT_CHECKED"):
-        v = "LOCAL RADIO-LAYER INJECTION — candidate"
-        why = ["receipts confined to a small area on one carrier, cell broadcast only"]
-        overturn = ["the agency record contains the same alert", "receipts from other carriers/channels or regions"]
+        v = "無線区間での局所的な注入（偽基地局）の疑い"
+        why = ["受信が狭い範囲・単一事業者・エリアメール等のみに限られている"]
+        overturn = ["発表機関の記録に同じ速報がある", "他の事業者・経路・地域での受信記録が見つかる"]
     elif auth == "MISMATCH" and foot in ("NATIONAL", "NOT_CHECKED"):
-        v = "CONTENT ALTERED IN DISTRIBUTION — investigate the chain between agency and receivers"
-        why = ["what people received differs from what the agency published"]
-        overturn = ["the difference is a transcription error in the received copy"]
+        v = "配信途中で内容が改変された疑い（発表機関から受信者までの経路を調査）"
+        why = ["受信した内容が、発表機関の公開内容と異なる"]
+        overturn = ["差異が受信側の書き写しの誤りにすぎない"]
     elif auth in ("MATCH", "NOT_CHECKED") and phys == "REAL_EVENT_WRONG_PARAMETERS" and timing in ("CONSISTENT", "NOT_CHECKED"):
-        v = "AUTHENTIC UPSTREAM ALERT, WRONG CONTENT — processing-fault class"
-        why = ["a real earthquake occurred", "the alert describes it wrongly"]
-        if timing == "CONSISTENT": why.append("the agency's trigger time equals that earthquake's P arrival")
-        if auth == "MATCH": why.append("the agency's own record carries the same content")
-        if foot == "NATIONAL": why.append("distribution pattern is upstream/national, not radio-layer")
-        overturn = ["evidence the estimator's inputs (station data, telemetry) were tampered with — "
-                    "which needs station-level data; run eew_diagnose.py",
-                    "unexplained changes to the EEW software/configuration before the event (change-management logs)"]
+        v = "発表機関から出た本物の速報で、内容が誤り ― 処理不具合の類型"
+        why = ["実際に地震が起きている", "速報はその地震を誤って表している"]
+        if timing == "CONSISTENT": why.append("機関の検知時刻が、その地震の P 波到達時刻と一致する")
+        if auth == "MATCH": why.append("発表機関自身の記録に同じ内容がある")
+        if foot == "NATIONAL": why.append("届き方が全国型で、無線区間での偽装ではない")
+        overturn = ["推定処理への入力（観測点データ・伝送）が改ざんされた証拠 ― 確認には観測点単位のデータが必要。"
+                    "eew_diagnose.py を実行してください",
+                    "地震前に緊急地震速報のソフトウェア・設定に説明のつかない変更があった（変更管理記録）"]
     elif phys == "NO_PHYSICAL_EVENT" and auth in ("MATCH", "NOT_CHECKED"):
-        v = "UPSTREAM FALSE TRIGGER (no real event) — sensor/telemetry fault or upstream compromise"
-        why = ["agency issued it", "no earthquake in an independent catalogue"]
-        overturn = ["a late catalogue entry", "station-level data showing a single faulty sensor "
-                    "(cf. JMA 2016-08-01 Futtsu power-supply fault; 2013-08-08 seafloor timestamp fault)"]
+        v = "上流での誤検知（実際の地震なし）― センサー・伝送の不具合、または上流での侵害"
+        why = ["発表機関が発表している", "独立カタログに対応する地震がない"]
+        overturn = ["遅れてカタログに掲載される",
+                    "観測点単位のデータで単一センサーの故障が確認される"
+                    "（例: 2016年8月1日 富津観測点の電源部故障、2013年8月8日 海底地震計の時刻付与異常）"]
     elif phys == "CONSISTENT":
-        v = "CONSISTENT ALERT — no anomaly found"
-        why = ["parameters agree with an independent catalogue"]
+        v = "整合した速報 ― 異常は見つかりません"
+        why = ["震源要素が独立カタログと一致する"]
     rep.p(f"  {v}")
-    for w in why: rep.p(f"    because: {w}")
-    for o in overturn: rep.p(f"    would change if: {o}")
+    for w in why: rep.p(f"    根拠: {w}")
+    for o in overturn: rep.p(f"    覆る条件: {o}")
     rep.data["verdict"] = {"verdict": v, "because": why, "would_change_if": overturn,
                            "axes": {"authority": auth, "footprint": foot, "physics": phys, "timing": timing}}
 
 
 def main(argv=None):
+    L.setup_console()
+    L.localize_argparse()
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--alert", required=True, help="alert as received (normalised JSON or JMA XML)")
-    ap.add_argument("--authority", nargs="*", default=[], help="agency record(s): JMA XML or JSON")
-    ap.add_argument("--receipts", help="CSV of receipt observations")
-    ap.add_argument("--catalog", help="independent catalogue, USGS GeoJSON")
-    ap.add_argument("--fetch-usgs", action="store_true", help="query the USGS FDSN event service")
-    ap.add_argument("--stations", help="CSV station,lat,lon — the agency's sensors (default: reference points)")
-    ap.add_argument("--json", help="write machine-readable report here")
+    ap.add_argument("--alert", required=True, help="受信した速報（正規化 JSON または気象庁XML）")
+    ap.add_argument("--authority", nargs="*", default=[], help="発表機関の記録（気象庁XML または JSON、複数可）")
+    ap.add_argument("--receipts", help="受信記録の CSV")
+    ap.add_argument("--catalog", help="独立した地震カタログ（USGS GeoJSON）")
+    ap.add_argument("--fetch-usgs", action="store_true", help="USGS の FDSN イベントサービスに照会する")
+    ap.add_argument("--stations", help="観測点 CSV（観測点,緯度,経度）。省略時は日本の参照地点を使う")
+    ap.add_argument("--json", help="機械可読の結果をこのファイルに書き出す")
     a = ap.parse_args(argv)
 
     alert = L.load_alert(a.alert)
     rep = L.Report()
-    rep.p(f"Alert: {alert.source} {alert.region} M{alert.magnitude} at {alert.h_int} — issued "
-          f"{L.fmt_time(alert.issued_at)} (serial {alert.serial}, detected {L.fmt_time(alert.detected_at)})")
+    rep.p(f"速報: {alert.source} {alert.region} M{alert.magnitude}、{alert.h_int}"
+          f"（{f'第{alert.serial}報、' if alert.serial is not None else ''}発表 {L.fmt_time(alert.issued_at)}、"
+          f"地震波検知 {L.fmt_time(alert.detected_at)}）")
     rep.data["alert"] = alert.to_dict()
 
     auth = check_authority(alert, a.authority, rep)
     foot = check_footprint(load_receipts(a.receipts) if a.receipts else [], rep)
-    geo = load_catalog(a.catalog) if a.catalog else (fetch_usgs(alert) if a.fetch_usgs else None)
+    geo = json.loads(L.read_text(a.catalog)) if a.catalog else (fetch_usgs(alert) if a.fetch_usgs else None)
     points = L.load_points_csv(a.stations) if a.stations else L.JAPAN_REFERENCE_POINTS
-    tt = L.TravelTimes(quiet=False)
+    tt = L.TravelTimes()
     phys, timing = check_physics(alert, geo, points, tt, rep)
     verdict(auth, foot, phys, timing, rep)
 

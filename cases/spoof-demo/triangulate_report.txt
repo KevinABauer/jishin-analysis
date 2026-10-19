@@ -1,23 +1,23 @@
-Alert: received-handset 東京湾 M8.1 at 35.500°N 139.900°E 30 km — issued 2026-10-20 18:15:00.0 JST (serial None, detected —)
+速報: 受信端末 東京湾 M8.1、北緯35.500° 東経139.900° 深さ30km（発表 2026/10/20 18:15:00.0 JST、地震波検知 －）
 
-A · Authority — does the agency's own record contain this alert?
-────────────────────────────────────────────────────────────────
-  [A0] – n/a   No authoritative record supplied (--authority). JMA publishes EEW (warning) content on its 緊急地震速報(警報)発表状況 pages and in 防災情報XML (VXSE43).
+A ・ 発表元 ― 発表機関自身の記録にこの速報はあるか
+─────────────────────────
+  [A0] － 対象外  発表機関の記録が指定されていません（--authority）。気象庁は緊急地震速報（警報）の内容を「緊急地震速報（警報）発表状況」ページと防災情報XML（VXSE43）で公開しています。
 
-B · Footprint — what does the distribution pattern say about the origin?
-────────────────────────────────────────────────────────────────────────
-  [B1] · info  60 receipts spanning 3 km; carriers ['docomo']; channels ['cbs']; 90 % of receipts within 3.6 s.
-  [B3] ⚑ FLAG  LOCAL pattern: 3.3 km, single carrier, cell broadcast only. Consistent with a rogue base station (fake eNB/gNB) broadcasting ETWS/CMAS.
-  [B4] · info  Cell IDs reported: ['440-10-99999-1']. IDs absent from the carrier's own cell list are a strong fake-cell indicator.
-  [B5] · info  Transmitter estimate 35.65942°N 139.70051°E, 95 % region radius ≈ 0.03 km (path-loss exponent 3.21, fit RMS 4.4 dB, 60 receipts).
+B ・ 受信範囲 ― 届き方から見た発信元
+──────────────────
+  [B1] ・ 参考    受信記録 60 件、広がり 4km。事業者: ドコモ。経路: エリアメール等。受信時刻の 90% が 3.0 秒の幅に収まる。
+  [B3] ▲ 要注意   局所型の届き方です（4.0km、単一事業者、エリアメール等のみ）。偽基地局（偽の eNB／gNB）による ETWS の送信と矛盾しません。
+  [B4] ・ 参考    報告されたセルID: ['440-10-99999-1']。事業者自身の基地局リストにない ID は、偽基地局を強く示唆します。
+  [B5] ・ 参考    送信源の推定位置 北緯35.65932° 東経139.70057°、95% 範囲の半径 約0.03km（距離減衰係数 3.20、残差 RMS 3.3dB、受信記録 60 件）。
 
-C · Physics — is there a real earthquake behind the alert?
-──────────────────────────────────────────────────────────
-  [C1] ⚑ FLAG  No M≥4 event in the independent catalogue within −20/+10 min. Either nothing happened (sensor/telemetry glitch, or fabrication), or the catalogue lags — re-query later.
+C ・ 物理 ― 速報の裏に実際の地震はあるか
+────────────────────
+  [C1] ▲ 要注意   前20分～後10分に M4 以上の地震が独立カタログにありません。何も起きていない（センサーや伝送の不具合、または捏造）か、カタログの掲載が遅れているかです。時間をおいて再照会してください。
 
-Verdict
-───────
-  LOCAL RADIO-LAYER INJECTION — candidate
-    because: receipts confined to a small area on one carrier, cell broadcast only
-    would change if: the agency record contains the same alert
-    would change if: receipts from other carriers/channels or regions
+総合判定
+──────────
+  無線区間での局所的な注入（偽基地局）の疑い
+    根拠: 受信が狭い範囲・単一事業者・エリアメール等のみに限られている
+    覆る条件: 発表機関の記録に同じ速報がある
+    覆る条件: 他の事業者・経路・地域での受信記録が見つかる

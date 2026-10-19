@@ -1,6 +1,6 @@
 {
   "alert": {
-    "source": "JMA",
+    "source": "気象庁",
     "event_id": "",
     "serial": 17,
     "info_type": "発表",
@@ -11,8 +11,8 @@
     "region": "千島列島",
     "message_digest": "",
     "notes": [
-      "serial/issue/detection time, hypocentre 48.2N 153.4E 140 km and M9.9 are as published on JMA's 緊急地震速報(警報)発表状況 page for this event",
-      "hypocenter_magnitude is a RECONSTRUCTION: JMA stated M was computed ~680 km farther from Japan than the true source; exact coordinates not published"
+      "第17報、発表時刻、地震波検知時刻、震源（北緯48.2度・東経153.4度・深さ140km）、M9.9 は、気象庁「緊急地震速報（警報）発表状況」の本事案ページに公表された値",
+      "hypocenter_magnitude は【再構成】。気象庁は M を真の震源より日本から約680km 遠い位置で計算したと説明しているが、座標は公表されていない"
     ],
     "hypocenter": {
       "lat": 48.2,
@@ -26,7 +26,7 @@
     }
   },
   "authority_record": {
-    "source": "JMA",
+    "source": "気象庁",
     "event_id": "",
     "serial": 17,
     "info_type": "",
@@ -37,7 +37,7 @@
     "region": "千島列島",
     "message_digest": "",
     "notes": [
-      "transcribed from JMA's published EEW record for 2026-10-16 (serial 17)"
+      "気象庁が公表した 2026年10月16日の緊急地震速報（第17報）の記録を書き起こしたもの"
     ],
     "hypocenter": {
       "lat": 48.2,
@@ -50,42 +50,42 @@
     {
       "code": "A2",
       "status": "PASS",
-      "message": "Alert matches the agency record (M9.9, 48.200°N 153.400°E 140 km, issued 2026-10-16 12:40:02.6 JST). The agency itself published this content."
+      "message": "発表機関の記録と一致します（M9.9、北緯48.200° 東経153.400° 深さ140km、発表 2026/10/16 12:40:02.6 JST）。この内容は発表機関自身が出したものです。"
     },
     {
       "code": "B1",
       "status": "INFO",
-      "message": "400 receipts spanning 1315 km; carriers ['au', 'rakuten', 'softbank']; channels ['cbs', 'jalert', 'tv']; 90 % of receipts within 3.0 s."
+      "message": "受信記録 400 件、広がり 1274km。事業者: au、楽天モバイル、ソフトバンク。経路: エリアメール等、Jアラート、テレビ。受信時刻の 90% が 3.1 秒の幅に収まる。"
     },
     {
       "code": "B3",
       "status": "PASS",
-      "message": "NATIONAL pattern (1315 km extent, 3 independent carriers, non-cellular channels ['jalert', 'tv']). A radio-layer spoof cannot produce this: it would need simultaneous rogue cells on every carrier across hundreds of km, plus control of broadcast TV/J-ALERT. The common point is upstream of the carriers."
+      "message": "全国型の届き方です（広がり 1274km、独立した 3 事業者、携帯以外の経路（Jアラート、テレビ））。無線区間での偽装ではこうはなりません。数百km にわたり全事業者に偽基地局を同時に置き、さらにテレビや Jアラートまで押さえる必要があるためです。共通の発信点は各事業者より上流にあります。"
     },
     {
       "code": "C1",
       "status": "INFO",
-      "message": "Independent catalogue: M6.9 mww — 76 km NE of Ozernovskiy, Russia — 51.985°N 157.270°E 135 km at 2026-10-16 12:35:31.0 JST (fixture-kamchatka-20261016)."
+      "message": "独立カタログ: M6.9（mww）76 km NE of Ozernovskiy, Russia、北緯51.985° 東経157.270° 深さ135km、発生 2026/10/16 12:35:31.0 JST（fixture-kamchatka-20261016）。"
     },
     {
       "code": "C2",
       "status": "FLAG",
-      "message": "Alert parameters disagree with the real event: epicentre 503 km away, ΔM = +3.0 (≈31,623× the energy). The event is real; the alert's description of it is not."
+      "message": "速報の震源要素が実際の地震と食い違います。震央は 503km 離れ、マグニチュードは +3.0（エネルギーにして約 31,623 倍）。地震そのものは本物ですが、速報はその地震を正しく表していません。"
     },
     {
       "code": "C3",
       "status": "FLAG",
-      "message": "M9.9 exceeds the largest instrumentally recorded earthquake (Chile 1960, Mw 9.5). Physically possible in principle, but as a prior it marks an estimator operating outside its envelope."
+      "message": "M9.9 は観測史上最大の地震（1960年チリ地震、Mw 9.5）を上回ります。原理的にあり得ないとは言えませんが、事前の見込みとしては、推定処理が想定外の領域で動いていたことを示します。"
     },
     {
       "code": "C4",
       "status": "PASS",
-      "message": "Agency detection 2026-10-16 12:38:10.1 JST vs. real event's P wave first reaching the network (Shiretoko/Rausu, 1259 km, 157.6 s travel) at 2026-10-16 12:38:08.6 JST: lag +1.5 s. The trigger WAS that earthquake's P wave."
+      "message": "機関の地震波検知 2026/10/16 12:38:10.1 JST に対し、実際の地震の P 波が観測網に最初に届く時刻は知床・羅臼（1259km、走時 157.6 秒）で 2026/10/16 12:38:08.6 JST。差は +1.5 秒。検知のきっかけは、まさにこの地震の P 波です。"
     }
   ],
   "footprint": {
     "receipts": 400,
-    "extent_km": 1315.1656256258382,
+    "extent_km": 1274.2662276495964,
     "carriers": [
       "au",
       "rakuten",
@@ -97,7 +97,7 @@
       "tv"
     ],
     "distinct_digests": 1,
-    "t_spread_p5_p95_s": 3.024835
+    "t_spread_p5_p95_s": 3.121
   },
   "catalog_event": {
     "id": "fixture-kamchatka-20261016",
@@ -118,7 +118,7 @@
     "energy_ratio": 31622.776601683792
   },
   "timing": {
-    "first_point": "Shiretoko/Rausu",
+    "first_point": "知床・羅臼",
     "distance_km": 1258.727669946257,
     "p_travel_s": 157.6483292737157,
     "predicted_first_p": "2026-10-16T03:38:08.648329+00:00",
@@ -126,17 +126,17 @@
     "lag_s": 1.451671
   },
   "verdict": {
-    "verdict": "AUTHENTIC UPSTREAM ALERT, WRONG CONTENT — processing-fault class",
+    "verdict": "発表機関から出た本物の速報で、内容が誤り ― 処理不具合の類型",
     "because": [
-      "a real earthquake occurred",
-      "the alert describes it wrongly",
-      "the agency's trigger time equals that earthquake's P arrival",
-      "the agency's own record carries the same content",
-      "distribution pattern is upstream/national, not radio-layer"
+      "実際に地震が起きている",
+      "速報はその地震を誤って表している",
+      "機関の検知時刻が、その地震の P 波到達時刻と一致する",
+      "発表機関自身の記録に同じ内容がある",
+      "届き方が全国型で、無線区間での偽装ではない"
     ],
     "would_change_if": [
-      "evidence the estimator's inputs (station data, telemetry) were tampered with — which needs station-level data; run eew_diagnose.py",
-      "unexplained changes to the EEW software/configuration before the event (change-management logs)"
+      "推定処理への入力（観測点データ・伝送）が改ざんされた証拠 ― 確認には観測点単位のデータが必要。eew_diagnose.py を実行してください",
+      "地震前に緊急地震速報のソフトウェア・設定に説明のつかない変更があった（変更管理記録）"
     ],
     "axes": {
       "authority": "MATCH",

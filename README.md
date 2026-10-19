@@ -1,17 +1,18 @@
-# eew-forensics
+# jishin-analysis
 
-Two tools for interrogating an earthquake early-warning (EEW) alert, built around the
-JMA alert of 16 Oct 2026 (M9.9 "Kuril Islands", withdrawn after 8 minutes; the real
-event was a Mww 6.9 at 135 km depth near Kamchatka).
+緊急地震速報を検証するための2つのツールです。2026年10月16日に気象庁が発表し、約8分後に取り消した
+緊急地震速報（警報）（「千島列島 M9.9」、実際はカムチャツカ半島付近の深さ135km・Mw 6.9）を題材にしています。
 
-| Tool | Question it answers |
+| ツール | 答える問い |
 |---|---|
-| `alert_triangulate.py` | Where did the alert come from — the agency, the distribution chain, or a radio-layer spoof? Is there a real earthquake behind it? |
-| `eew_diagnose.py` | Given station data, which stage of the EEW estimate failed, and which known failure class does it match? |
+| `alert_triangulate.py` | その速報はどこから来たのか ― 発表機関か、配信経路か、無線区間での偽装か。裏に実際の地震はあるか |
+| `eew_diagnose.py` | 観測データから見て、速報の推定のどの段階が誤ったのか。既知の不具合のどの類型に当たるか |
 
-```
+## すぐに試す
+
+```bash
 pip install -r requirements.txt
-python make_synthetic.py            # rebuild the test cases (already included)
+python make_synthetic.py            # 検証用データを作り直す（同梱済み）
 
 python alert_triangulate.py --alert cases/2026-10-16/alert.json \
     --authority cases/2026-10-16/authority_jma.json \
@@ -22,72 +23,120 @@ python eew_diagnose.py picks --picks cases/2026-10-16/picks_synthetic.csv \
     --alert cases/2026-10-16/alert.json --reference cases/2026-10-16/usgs_event.geojson
 ```
 
-Saved outputs for both are in `cases/2026-10-16/*_report.txt`; the rogue-cell demo is in `cases/spoof-demo/`.
+実行結果は `cases/2026-10-16/*_report.txt` に、偽基地局を想定した例は `cases/spoof-demo/` に入っています。
+初回は P 波の走時表を作るため1分ほどかかります（以後は `~/.cache/eew_forensics/` のキャッシュを使用。
+場所は環境変数 `EEW_CACHE` で変更可）。
 
 ## alert_triangulate.py
 
-Three independent axes:
+互いに独立した3つの観点から調べます。
 
-- **A · Authority** — matches the received alert against the agency's own record (JMA 防災情報XML
-  VXSE43/44/45, or JSON). A mismatch means content changed after the agency.
-- **B · Footprint** — from a CSV of receipts (time, position, carrier, channel, optional RSSI/cell ID).
-  National, multi-carrier, multi-channel → common source upstream of the carriers. Local, single
-  carrier, cell broadcast only → rogue base station candidate, and the transmitter is multilaterated
-  from RSSI (log-distance path loss, grid search, 95 % region by Δχ²).
-- **C · Physics** — compares the alert with an independent catalogue (`--catalog` file or
-  `--fetch-usgs`) and checks whether the agency's *wave-detected* time equals the moment the real
-  event's P wave first reached the network (IASP91 via TauP; `--stations` for real sensor coordinates).
+- **A ・ 発表元** ― 受信した速報を、発表機関自身の記録（気象庁防災情報XML の VXSE43/44/45、または JSON）と照合
+  します。一致しなければ、発表後のどこかで内容が変わっています。
+- **B ・ 受信範囲** ― 受信記録の CSV（時刻・位置・事業者・経路、あれば受信強度とセルID）から届き方を見ます。
+  広範囲・複数事業者・複数経路なら、共通の発信点は各事業者より上流です。狭い範囲・単一事業者・
+  エリアメール等のみなら偽基地局を疑い、受信強度から送信源の位置を推定します（距離減衰モデルのグリッドサーチ、
+  Δχ2 による 95% 範囲）。
+- **C ・ 物理** ― 独立した地震カタログ（`--catalog` のファイル、または `--fetch-usgs`）と照合し、さらに
+  発表機関の「地震波検知時刻」が、実際の地震の P 波が観測網に最初に届いた時刻と一致するかを調べます
+  （TauP の IASP91。実際の観測点座標は `--stations` で指定）。
 
-Each verdict lists what would overturn it.
+総合判定には、それぞれ「何が分かれば覆るか」を併記します。
 
 ## eew_diagnose.py
 
-Re-locates the event from P picks and tests the alert against JMA's documented EEW failure classes:
+P 波の読み取り値から震源を決め直し、気象庁の緊急地震速報で記録に残っている不具合の類型と照合します。
 
-| Check | Failure class | Depends on magnitude coefficients? |
+| 検査 | 不具合の類型 | マグニチュードの係数に依存するか |
 |---|---|---|
-| D1 | mislocation; including where solutions from only the **first N picks** can land | no |
-| D2 | magnitude computed with stations beyond the distance cutoff (700 km since 2020-09-07) | station counts: no · M values: yes |
-| D3 | magnitude and intensity stages using different hypocentres | no |
-| D4 | out-of-network event (azimuthal gap, nearest-station distance) | no |
-| D5 | implausible M; differential amplitude check against the real event | partly |
-| D6 | intensity over-prediction; whether the intensity model was faithful to its inputs (Si & Midorikawa 1999, point and crude finite source) | no (uses published GMPE) |
-| D7 | one station controlling M (2016 Futtsu class) or location | no |
-| D8 | outlier picks — overlapping events, timestamp faults (2006, 2013 classes) | no |
+| D1 | 震源の誤決定。**最初の N 観測点だけ**で決めた解がどこに落ち得るかも確認 | しない |
+| D2 | 除外距離（2020年9月7日以降は 700km）を超える観測点を M の計算に使用 | 観測点数: しない／M の値: する |
+| D3 | マグニチュードと震度予測で異なる震源を使用 | しない |
+| D4 | 観測網の外の地震（方位角ギャップ、最寄り観測点までの距離） | しない |
+| D5 | あり得ない M、実際の地震との振幅比（差分による比較） | 一部する |
+| D6 | 震度の過大予測と、震度予測の段階が入力に忠実だったか（司・翠川 1999、点震源と粗い面震源） | しない（公表式を使用） |
+| D7 | 1観測点が M（2016年 富津型）または震源位置を左右 | しない |
+| D8 | 外れ値の読み取り ― 複数の地震の重なり、時刻付与の異常（2006年、2013年型） | しない |
 
-Subcommands: `picks` (CSV `station,lat,lon,p_time[,amp_um,observed_shindo]`), `waveforms`
-(miniSEED/SAC + StationXML or coords CSV → STA/LTA + AIC picks, peak displacement), `fetch`
-(FDSN download), `jma-history` (parse a saved JMA 緊急地震速報 history page into the serial-by-serial
-sequence and emit an alert JSON).
+サブコマンド:
 
-## Getting real data
+- `picks` ― 読み取り値の CSV を解析（`観測点,緯度,経度,P波到達時刻[,最大変位(μm),観測震度]`）
+- `waveforms` ― miniSEED／SAC と StationXML（または観測点 CSV）から、STA/LTA と AIC で P 波を読み取り、
+  最大変位を測ってから解析
+- `fetch` ― FDSN データセンターから波形と StationXML を取得
+- `jma-history` ― 保存した気象庁「緊急地震速報の内容」ページから各報の推移を取り出し、速報 JSON を書き出す
 
-- **The alert as issued**: JMA 緊急地震速報(警報)発表状況 → this event → 緊急地震速報の内容. Save the page
-  and run `eew_diagnose.py jma-history page.html --serial 17 --out alert.json`. JMA 防災情報XML archives
-  also carry VXSE43.
-- **Japanese station data** (what JMA's system actually saw): NIED Hi-net and F-net (registration
-  required; `HinetPy` reads Hi-net win32 into SAC). JMA's own station waveforms are not public.
-- **Global broadband** via FDSN, e.g. `II.ERM` (Erimo), `IU.MAJO` (Matsushiro), `IU.YSS`
-  (Yuzhno-Sakhalinsk), `IU.PET` (Petropavlovsk), `G.INU` (Inuyama):
-  `eew_diagnose.py fetch --stations II.ERM,IU.MAJO,IU.YSS,IU.PET,G.INU --origin 2026-10-16T03:35:31`
-- **Receipts** for footprint analysis: your own handsets/logs, staff reports, municipal J-ALERT logs,
-  broadcaster logs. A suspected rogue cell belongs with the carrier and the 総合通信局 (MIC runs
-  DEURAS radio direction finding).
+## 日本語環境への対応
 
-## What's verified and what isn't
+- **CSV の文字コード**: UTF-8（BOM の有無を問わず）と Shift_JIS（Excel の既定）を自動で判別します。
+  ツールが書き出す CSV は、Excel でそのまま開ける BOM 付き UTF-8 です。
+- **列名**: 英語・日本語のどちらでも構いません。
 
-- Verified here: travel times against direct TauP calls; the triangulation verdicts on the 2026 case
-  and the spoof demo (transmitter recovered to ~10 m on clean synthetic RSSI — real handset RSSI will
-  be far worse); the diagnostic on the 2026 case and on a correct in-network control (no failure class
-  flagged); the waveform path on synthetic waveforms (picks within +0.1–0.4 s, amplitudes within ~3 %);
-  the history-page parser on an excerpt in the page's layout.
-- **Not** run here: `fetch` and `--fetch-usgs` (no network route to those services from the build
-  sandbox), and the waveform path on real recordings.
-- **Illustrative, not operational**: `eew_illustrative` magnitude coefficients. JMA's operational
-  magnitude relation is not public; pass it with `--relation-coeffs a,b,c,d` if you have it.
-  Findings marked relation-independent do not rely on it.
-- The 2026 case's **station picks, amplitudes, intensities and receipts are synthetic**. The alert
-  values, detection time and USGS solution are real. `hypocenter_magnitude` is a reconstruction from
-  JMA's verbal statement (computed ~680 km farther from Japan than the true source); JMA has not
-  published those coordinates.
-- Si & Midorikawa is calibrated to ~300 km; everything here is an extrapolation, and flagged as one.
+  | 内部名 | 使える列名の例 |
+  |---|---|
+  | station | 観測点、観測点名、地点 |
+  | lat / lon | 緯度 / 経度 |
+  | p_time | P波到達時刻、到達時刻 |
+  | amp_um | 最大変位(μm)、振幅(μm) |
+  | observed_shindo | 観測震度、震度 |
+  | received_at | 受信時刻 |
+  | carrier | 事業者、キャリア |
+  | channel | 経路、伝達手段 |
+  | rssi_dbm | 受信強度_dbm |
+  | cell_id | セルID |
+  | message_digest | 本文ハッシュ |
+
+- **値の表記**: 全角数字・全角記号は正規化してから読みます。震度は「5弱」「５弱」「震度5弱」「5-」のいずれも可。
+  事業者は「ドコモ」「au」「KDDI」「ソフトバンク」「楽天モバイル」など、経路は「エリアメール」
+  「緊急速報メール」「テレビ」「ラジオ」「Jアラート」「防災無線」「アプリ」を受け付けます。
+- **時刻**: タイムゾーン指定のない時刻は**日本時間（JST）**とみなします。ISO 8601 のほか
+  「2026/10/16 12:40:02.6」「2026年10月16日12時40分02.6秒」も読めます。表示はすべて JST です。
+- **画面出力**: Shift_JIS で表せる文字だけを使い、全角文字を含む表の桁もそろえます。コマンドのヘルプと
+  エラーメッセージも日本語です。
+- **機械可読の出力**（`--json`）: メッセージは日本語、判定コード（`FLAG`／`PASS`／`INFO`／`N/A`）と
+  キー名は英語のままにしています（main ブランチの英語版と互換）。
+
+## 実データの入手
+
+- **発表された速報**: 気象庁「緊急地震速報（警報）発表状況」→ 該当の地震 →「緊急地震速報の内容」。
+  ページを保存して `eew_diagnose.py jma-history ページ.html --serial 17 --out alert.json`。
+  気象庁防災情報XML のアーカイブにも VXSE43 があります。
+- **国内の観測データ**（気象庁のシステムが実際に見ていたもの）: 防災科研の Hi-net・F-net
+  （利用登録が必要。`HinetPy` で Hi-net の win32 を SAC に変換できます）。気象庁自身の観測点の波形は非公開です。
+- **広帯域の観測点**（FDSN 経由）: 例 `II.ERM`（えりも）、`IU.MAJO`（松代）、`IU.YSS`（ユジノサハリンスク）、
+  `IU.PET`（ペトロパブロフスク・カムチャツキー）、`G.INU`（犬山）
+
+  ```bash
+  python eew_diagnose.py fetch --stations II.ERM,IU.MAJO,IU.YSS,IU.PET,G.INU --origin "2026-10-16 12:35:31"
+  ```
+
+- **受信記録**: 手元の端末やログ、職員からの報告、自治体の Jアラート受信記録、放送局の記録など。
+  偽基地局が疑われる場合は、携帯事業者と総合通信局に連絡してください（総務省は電波監視システム DEURAS で
+  発射源の方向探知を行っています）。
+
+## 検証済みの範囲と限界
+
+- **確認済み**: 走時（TauP の直接計算と照合）。2026年の事例と偽基地局の例での判定
+  （合成のきれいな受信強度では送信源を約10m で復元。実際の端末の受信強度はずっと粗くなります）。
+  2026年の事例と、観測網内の正しい速報（対照例。不具合の類型は検出されない）での診断。
+  合成波形での `waveforms`（読み取り誤差 +0.1～0.4 秒、振幅誤差 約3%）。発表履歴ページのパーサ。
+  Shift_JIS・日本語列名の CSV の読み込み。
+- **未実行**: `fetch` と `--fetch-usgs`（作成環境からそのサービスに接続できなかったため）、および実際の
+  記録に対する `waveforms`。
+- **説明用であって運用式ではないもの**: `eew_illustrative` のマグニチュード係数。気象庁の運用式は公開されて
+  いません。お持ちの場合は `--relation-coeffs a,b,c,d` で与えてください。「係数に依存しない」とした結果は
+  この係数に左右されません。
+- 2026年の事例の**観測点の読み取り値・振幅・震度・受信記録は合成データ**です。速報の値、地震波検知時刻、
+  USGS の震源は実データです。`hypocenter_magnitude` は、気象庁の「M を実際より日本から約680km 遠い震源で
+  計算した」という説明からの再構成で、座標は公表されていません。
+- 司・翠川式の較正範囲はおおむね 300km までで、本事例はすべて外挿です（出力にもその旨を表示します）。
+
+## 参考文献
+
+- 坪井忠二（1954）地震動の最大振幅から地震の規模 M を定めることについて．地震 第2輯, 7, 185-193.
+- 司宏俊・翠川三郎（1999）断層タイプ及び地盤条件を考慮した最大加速度・最大速度の距離減衰式．
+  日本建築学会構造系論文集, 523, 63-70.
+- 翠川三郎・藤本一雄・村松郁栄（1999）計測震度と旧気象庁震度および地震動強さの指標との関係．
+  地域安全学会論文集, 1, 51-56.
+- Kennett, B. L. N. and Engdahl, E. R. (1991) Traveltimes for global earthquake location and phase
+  identification. Geophys. J. Int., 105, 429-465.（IASP91）

@@ -1,28 +1,28 @@
-Alert: JMA 千島列島 M9.9 at 48.200°N 153.400°E 140 km — issued 2026-10-16 12:40:02.6 JST (serial 17, detected 2026-10-16 12:38:10.1 JST)
+速報: 気象庁 千島列島 M9.9、北緯48.200° 東経153.400° 深さ140km（第17報、発表 2026/10/16 12:40:02.6 JST、地震波検知 2026/10/16 12:38:10.1 JST）
 
-A · Authority — does the agency's own record contain this alert?
-────────────────────────────────────────────────────────────────
-  [A2] ✓ pass  Alert matches the agency record (M9.9, 48.200°N 153.400°E 140 km, issued 2026-10-16 12:40:02.6 JST). The agency itself published this content.
+A ・ 発表元 ― 発表機関自身の記録にこの速報はあるか
+─────────────────────────
+  [A2] ○ 問題なし 発表機関の記録と一致します（M9.9、北緯48.200° 東経153.400° 深さ140km、発表 2026/10/16 12:40:02.6 JST）。この内容は発表機関自身が出したものです。
 
-B · Footprint — what does the distribution pattern say about the origin?
-────────────────────────────────────────────────────────────────────────
-  [B1] · info  400 receipts spanning 1315 km; carriers ['au', 'rakuten', 'softbank']; channels ['cbs', 'jalert', 'tv']; 90 % of receipts within 3.0 s.
-  [B3] ✓ pass  NATIONAL pattern (1315 km extent, 3 independent carriers, non-cellular channels ['jalert', 'tv']). A radio-layer spoof cannot produce this: it would need simultaneous rogue cells on every carrier across hundreds of km, plus control of broadcast TV/J-ALERT. The common point is upstream of the carriers.
+B ・ 受信範囲 ― 届き方から見た発信元
+──────────────────
+  [B1] ・ 参考    受信記録 400 件、広がり 1274km。事業者: au、楽天モバイル、ソフトバンク。経路: エリアメール等、Jアラート、テレビ。受信時刻の 90% が 3.1 秒の幅に収まる。
+  [B3] ○ 問題なし 全国型の届き方です（広がり 1274km、独立した 3 事業者、携帯以外の経路（Jアラート、テレビ））。無線区間での偽装ではこうはなりません。数百km にわたり全事業者に偽基地局を同時に置き、さらにテレビや Jアラートまで押さえる必要があるためです。共通の発信点は各事業者より上流にあります。
 
-C · Physics — is there a real earthquake behind the alert?
-──────────────────────────────────────────────────────────
-  [C1] · info  Independent catalogue: M6.9 mww — 76 km NE of Ozernovskiy, Russia — 51.985°N 157.270°E 135 km at 2026-10-16 12:35:31.0 JST (fixture-kamchatka-20261016).
-  [C2] ⚑ FLAG  Alert parameters disagree with the real event: epicentre 503 km away, ΔM = +3.0 (≈31,623× the energy). The event is real; the alert's description of it is not.
-  [C3] ⚑ FLAG  M9.9 exceeds the largest instrumentally recorded earthquake (Chile 1960, Mw 9.5). Physically possible in principle, but as a prior it marks an estimator operating outside its envelope.
-  [C4] ✓ pass  Agency detection 2026-10-16 12:38:10.1 JST vs. real event's P wave first reaching the network (Shiretoko/Rausu, 1259 km, 157.6 s travel) at 2026-10-16 12:38:08.6 JST: lag +1.5 s. The trigger WAS that earthquake's P wave.
+C ・ 物理 ― 速報の裏に実際の地震はあるか
+────────────────────
+  [C1] ・ 参考    独立カタログ: M6.9（mww）76 km NE of Ozernovskiy, Russia、北緯51.985° 東経157.270° 深さ135km、発生 2026/10/16 12:35:31.0 JST（fixture-kamchatka-20261016）。
+  [C2] ▲ 要注意   速報の震源要素が実際の地震と食い違います。震央は 503km 離れ、マグニチュードは +3.0（エネルギーにして約 31,623 倍）。地震そのものは本物ですが、速報はその地震を正しく表していません。
+  [C3] ▲ 要注意   M9.9 は観測史上最大の地震（1960年チリ地震、Mw 9.5）を上回ります。原理的にあり得ないとは言えませんが、事前の見込みとしては、推定処理が想定外の領域で動いていたことを示します。
+  [C4] ○ 問題なし 機関の地震波検知 2026/10/16 12:38:10.1 JST に対し、実際の地震の P 波が観測網に最初に届く時刻は知床・羅臼（1259km、走時 157.6 秒）で 2026/10/16 12:38:08.6 JST。差は +1.5 秒。検知のきっかけは、まさにこの地震の P 波です。
 
-Verdict
-───────
-  AUTHENTIC UPSTREAM ALERT, WRONG CONTENT — processing-fault class
-    because: a real earthquake occurred
-    because: the alert describes it wrongly
-    because: the agency's trigger time equals that earthquake's P arrival
-    because: the agency's own record carries the same content
-    because: distribution pattern is upstream/national, not radio-layer
-    would change if: evidence the estimator's inputs (station data, telemetry) were tampered with — which needs station-level data; run eew_diagnose.py
-    would change if: unexplained changes to the EEW software/configuration before the event (change-management logs)
+総合判定
+──────────
+  発表機関から出た本物の速報で、内容が誤り ― 処理不具合の類型
+    根拠: 実際に地震が起きている
+    根拠: 速報はその地震を誤って表している
+    根拠: 機関の検知時刻が、その地震の P 波到達時刻と一致する
+    根拠: 発表機関自身の記録に同じ内容がある
+    根拠: 届き方が全国型で、無線区間での偽装ではない
+    覆る条件: 推定処理への入力（観測点データ・伝送）が改ざんされた証拠 ― 確認には観測点単位のデータが必要。eew_diagnose.py を実行してください
+    覆る条件: 地震前に緊急地震速報のソフトウェア・設定に説明のつかない変更があった（変更管理記録）

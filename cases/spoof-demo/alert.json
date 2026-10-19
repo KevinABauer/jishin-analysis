@@ -1,6 +1,6 @@
 {
-  "source": "received-handset",
-  "issued_at": "2026-10-20T09:15:00Z",
+  "source": "受信端末",
+  "issued_at": "2026-10-20T18:15:00+09:00",
   "magnitude": 8.1,
   "region": "東京湾",
   "hypocenter": {
@@ -9,6 +9,6 @@
     "depth_km": 30
   },
   "notes": [
-    "fabricated demo alert"
+    "検証用に作った架空の速報"
   ]
 }

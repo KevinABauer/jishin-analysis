@@ -1,80 +1,80 @@
-Stations: 28   P-time reference: 2026-10-16 12:38:08.2 JST
-Relation: eew_illustrative: log10A = 0.72·M -1.2·log10R -0.002·R +1.69 [R=hypo, A µm, calibrated to 700 km]
-          ILLUSTRATIVE coefficients — shape only, not an agency's formula.
-Travel times: IASP91 (TauP)
-Alert: M9.9  intensity hypocentre 48.200°N 153.400°E 140 km  magnitude hypocentre 56.620°N 164.130°E 140 km
+観測点数: 28　P波時刻の基準: 2026/10/16 12:38:08.2 JST
+関係式: eew_illustrative: log10A = 0.72・M -1.2・log10R -0.002・R +1.69（R＝震源距離、A は μm、較正範囲 700km まで）
+　　　　【説明用の係数】式の形を示すためのもので、機関の運用式ではありません。
+走時: IASP91（TauP）
+速報: M9.9　震度予測の震源 北緯48.200° 東経153.400° 深さ140km　M計算の震源 北緯56.620° 東経164.130° 深さ140km
 
-Independent location from P picks
-─────────────────────────────────
-  52.080°N 157.623°E 115 km  origin 2026-10-16 12:35:27.0 JST  mean |residual| 0.23 s
-  near-best region spans 480 km, elongated along bearing 46°/226°
-  reference catalogue: 51.985°N 157.270°E 135 km → independent solution is 26 km from it
-  magnitude: not computed — nearest station 1284 km is beyond eew_illustrative's calibrated 700 km. Use the catalogue/teleseismic Mw for this event.
-
-D1 · Location — do the picks support the alert's hypocentres?
-─────────────────────────────────────────────────────────────
-  independent          52.080°N 157.623°E 115 km      mean|res| (free t0)   0.23 s   (stated t0)    0.23 s
-  reference            51.985°N 157.270°E 135 km      mean|res| (free t0)   0.25 s   (stated t0)    0.29 s
-  alert (intensity)    48.200°N 153.400°E 140 km      mean|res| (free t0)   1.95 s
-  alert (magnitude)    56.620°N 164.130°E 140 km      mean|res| (free t0)   4.39 s
-  [D1] ⚑ FLAG  alert (intensity): 526 km away; the FULL pick set rejects it (1.95 s vs 0.23 s). An alert computed from only the earliest picks can still land there — see below.
-  [D1] ⚑ FLAG  alert (magnitude): 657 km away; the FULL pick set rejects it (4.39 s vs 0.23 s). An alert computed from only the earliest picks can still land there — see below.
-
-  Early solutions (first N picks only — the information an EEW system has when it decides):
-    N=3: best 52.110°N 155.893°E 0 km  (118 km from full solution); near-best region 1350 km; ALSO FITS alert (magnitude)
-    N=4: best 52.670°N 156.833°E 0 km  (85 km from full solution); near-best region 1269 km; ALSO FITS alert (magnitude)
-    N=5: best 48.890°N 151.333°E 35 km  (569 km from full solution); near-best region 1357 km
-    N=8: best 50.430°N 153.433°E 120 km  (344 km from full solution); near-best region 1025 km
-  [D1] ⚑ FLAG  With the first 4 pick(s) the alert's hypocentre is as compatible with the data as the true one: an early-stage EEW solution could legitimately land there. Mislocation is explained by geometry; the failure is that nothing downstream caught it.
-
-D4 · Geometry — was the event inside the network?
-─────────────────────────────────────────────────
-  [D4] ⚑ FLAG  azimuthal gap 339°, nearest station 1284 km, stations lie toward bearing 230°. OUT-OF-NETWORK: distance along the back-azimuth trades off against origin time; relations calibrated on in-network events are being extrapolated.
-
-D2 · Distance cutoff (700 km from the hypocentre) — relation-independent part
-─────────────────────────────────────────────────────────────────────────────
-  independent          stations ≤700 km:   0   nearest   1289 km   M(cutoff) —  no estimate   M(no cutoff)* 10.6
-  reference            stations ≤700 km:   0   nearest   1266 km   M(cutoff) —  no estimate   M(no cutoff)* 10.5
-  alert (magnitude)    stations ≤700 km:   0   nearest   1934 km   M(cutoff) —  no estimate   M(no cutoff)* 12.6
-  alert (intensity)    stations ≤700 km:   0   nearest    797 km   M(cutoff) —  no estimate   M(no cutoff)*  9.0
-  * relation-dependent; shown to illustrate extrapolation, not as an estimate of the event
-  [D2] ⚑ FLAG  No station lies within 700 km of the alert's magnitude hypocentre (nearest 1934 km). With the cutoff working, NO magnitude could have been computed and no warning issued. The published M can only have come from stations the cutoff should have excluded — the safeguard was not applied.
-  [D2] · info  [relation-dependent] at 1929 km, eew_illustrative gives ∂M/∂R = 0.32 per 100 km of distance error. Every 100 km the hypocentre is pushed away adds that much to M; at 700 km the same relation gives 0.38/100 km.
-  [D2] · info  [relation-dependent] eew_illustrative at the alert's magnitude hypocentre with no cutoff → M12.6 (alert said M9.9). Agreement or disagreement here says more about the relation's coefficients than about the event — supply the operational relation to test it.
-
-D3 · Stage consistency — same hypocentre for magnitude and intensity?
-─────────────────────────────────────────────────────────────────────
-  [D3] ⚑ FLAG  magnitude computed at 56.620°N 164.130°E 140 km, intensity predicted from 48.200°N 153.400°E 140 km: 1183 km apart. A magnitude inflated by a far hypocentre was then applied to a near one — the errors compound.
-
-D5 · Magnitude plausibility
-───────────────────────────
-  [D5] ⚑ FLAG  M9.9 > Mw 9.5 (Chile 1960, largest instrumentally recorded). JMA introduced a seismologically plausible M ceiling after 2016-08-01; ask what its value is and whether it applies on this code path.
-  [D5] ⚑ FLAG  if the alert were right, the network would have recorded ≈10^3.3 = 1,901× the ground motion the real M6.9 event produces at the same stations (differential, eew_illustrative).
-
-D6 · Intensity — predicted vs observed shindo (Si & Midorikawa 1999)
-────────────────────────────────────────────────────────────────────
-  M9.9 at 48.200°N 153.400°E 140 km, point source:  max 4 (I=3.6); 0/28 stations ≥ 5-
-  M9.9 at 48.200°N 153.400°E 140 km, finite (L≈1,259 km): max 7 (I=6.9) at RAUSU; 16/28 stations ≥ 5-
-  (compare with the agency's published predicted ranges; a match means the intensity stage did its job on bad inputs)
-  using M6.9 at 51.985°N 157.270°E 135 km: predicted max 0 (I=-1.0)
-  [D6] ⚑ FLAG  prediction from the alert's inputs minus observed intensity: median +4.7 units (observed max 0).
-  [D6] · info  the same intensity model fed the correct M/location misses observed by -1.0 — the intensity stage is faithful; the fault is upstream in M/location.
-  [D6] · info  All stations are beyond Si & Midorikawa's ~300 km calibration range; predictions are extrapolations.
-
-D7 · Single-sensor control (leave-one-out)
-──────────────────────────────────────────
-  [D7] ✓ pass  no single station moves M by >0.5 or the location by >144 km (largest: WAKKANAI, 55 km).
-
-D8 · Outlier picks
+P波の読み取り値による独立した震源決定
 ──────────────────
-  [D8] ✓ pass  all picks within ±2.0 s of the independent solution.
+  北緯52.080° 東経157.623° 深さ115km　発生 2026/10/16 12:35:27.0 JST　平均残差 0.23 秒
+  候補域（残差が最良解に近い範囲）の広がり 480km、方位 46°／226° 方向に細長い
+  参照カタログ: 北緯51.985° 東経157.270° 深さ135km → 独立解との差 26km
+  マグニチュード: 計算しません。最寄り観測点 1284km が eew_illustrative の較正範囲 700km を超えています。この地震にはカタログ（遠地）の Mw を使ってください。
 
-Summary — failure classes supported by the data
-───────────────────────────────────────────────
-  • Out-of-network event: location under-determined along the back-azimuth (relation-independent).
-  • Magnitude used stations beyond the 700 km safeguard (relation-independent).
-  • Magnitude and intensity stages used different hypocentres (relation-independent).
-  • Intensity over-prediction follows from the M/location inputs; the intensity model itself behaves.
+D1 ・ 震源 ― 読み取り値は速報の震源を支持するか
+───────────────────────
+  独立解            北緯52.080° 東経157.623° 深さ115km      平均残差（発生時刻自由）  0.23 秒　（発生時刻固定）   0.23 秒
+  参照カタログ      北緯51.985° 東経157.270° 深さ135km      平均残差（発生時刻自由）  0.25 秒　（発生時刻固定）   0.29 秒
+  速報（震度予測）  北緯48.200° 東経153.400° 深さ140km      平均残差（発生時刻自由）  1.95 秒
+  速報（M計算）     北緯56.620° 東経164.130° 深さ140km      平均残差（発生時刻自由）  4.39 秒
+  [D1] ▲ 要注意   速報（震度予測）は 526km 離れており、全観測点の読み取り値はこれを支持しません（1.95 秒 対 0.23 秒）。ただし最初の数観測点だけで決めた解なら、そこに落ちることはあり得ます（下記）。
+  [D1] ▲ 要注意   速報（M計算）は 657km 離れており、全観測点の読み取り値はこれを支持しません（4.39 秒 対 0.23 秒）。ただし最初の数観測点だけで決めた解なら、そこに落ちることはあり得ます（下記）。
 
-  Not determinable from station data alone: whether a safeguard failed through a code regression,
-  a configuration change, or an unauthorised modification. That needs the agency's change history.
+  早い段階の解（最初の N 観測点のみ ＝ 速報システムが判断する時点で持っている情報）:
+    N=3: 最良解 北緯52.070° 東経155.833° 深さ25km（全観測点の解から 122km）、候補域 1356km。速報（M計算）も同程度に当てはまる
+    N=4: 最良解 北緯52.750° 東経156.973° 深さ0km（全観測点の解から 87km）、候補域 1256km。速報（M計算）も同程度に当てはまる
+    N=5: 最良解 北緯48.890° 東経151.333° 深さ35km（全観測点の解から 569km）、候補域 1357km
+    N=8: 最良解 北緯50.430° 東経153.433° 深さ120km（全観測点の解から 344km）、候補域 1025km
+  [D1] ▲ 要注意   最初の 4 観測点までの情報では、速報の震源は真の震源と同じくらいデータに合います。早い段階の速報の解がそこに落ちることは、処理として起こり得ます。誤決定自体は観測点配置で説明でき、問題はそれが後段の処理で止められなかったことです。
+
+D4 ・ 位置関係 ― 地震は観測網の中で起きたか
+─────────────────────
+  [D4] ▲ 要注意   方位角ギャップ 339°、最寄り観測点 1284km、観測点は方位 230° の側に偏在。観測網の外の地震です。観測網から見た方向の距離と発生時刻とがトレードオフの関係になり、網内の地震で較正した関係式を外挿して使うことになります。
+
+D2 ・ 距離による除外（震源から 700km）― 関係式に依存しない部分
+───────────────────────────────
+  独立解            700km 以内の観測点   0　最寄り   1289km　M（除外あり）  － 推定不能　M（除外なし）※ 10.6
+  参照カタログ      700km 以内の観測点   0　最寄り   1266km　M（除外あり）  － 推定不能　M（除外なし）※ 10.5
+  速報（M計算）     700km 以内の観測点   0　最寄り   1934km　M（除外あり）  － 推定不能　M（除外なし）※ 12.6
+  速報（震度予測）  700km 以内の観測点   0　最寄り    797km　M（除外あり）  － 推定不能　M（除外なし）※  9.0
+  ※ 関係式に依存します。外挿の影響を示すための値で、地震の規模の推定値ではありません。
+  [D2] ▲ 要注意   速報のM計算の震源から 700km 以内に観測点が1つもありません（最寄り 1934km）。除外機能が働いていれば、マグニチュードは計算できず、警報も出なかったはずです。発表された M は、除外されるべき観測点からしか得られません。つまり、この除外機能が働いていませんでした。
+  [D2] ・ 参考    ［関係式に依存］1929km では、eew_illustrative の ∂M/∂R は距離の誤り 100km あたり 0.32。震源が 100km 遠くに置かれるごとに M がこれだけ増えます。同じ式で 700km では 100km あたり 0.38。
+  [D2] ・ 参考    ［関係式に依存］速報のM計算の震源で除外なしに eew_illustrative を使うと M12.6（速報は M9.9）。ここで一致するかどうかは、地震そのものより係数の選び方で決まります。検証するには運用式の係数を与えてください。
+
+D3 ・ 段階間の整合 ― マグニチュードと震度予測で同じ震源を使ったか
+────────────────────────────────
+  [D3] ▲ 要注意   マグニチュードは 北緯56.620° 東経164.130° 深さ140km、震度予測は 北緯48.200° 東経153.400° 深さ140km で計算: 両者は 1183km 離れています。遠い震源で膨らんだ M を、近い震源に当てはめたことになり、誤差が重なります。
+
+D5 ・ マグニチュードの妥当性
+──────────────
+  [D5] ▲ 要注意   M9.9 は観測史上最大の 1960年チリ地震（Mw 9.5）を上回ります。気象庁は2016年8月1日の事案の後、地震学的に考えられるマグニチュードの上限値を設けるとしています。その値と、今回の処理経路でそれが適用されるのかを確認すべきです。
+  [D5] ▲ 要注意   速報が正しければ、各観測点は実際の M6.9 の地震の 約10^3.3 ＝ 1,901 倍の揺れを記録していたはずです（差分による比較、eew_illustrative）。
+
+D6 ・ 震度 ― 予測震度と観測震度（司・翠川 1999）
+────────────────────────
+  M9.9・北緯48.200° 東経153.400° 深さ140km、点震源: 最大 震度4（計測震度 3.6）、震度5弱以上 0/28 観測点
+  M9.9・北緯48.200° 東経153.400° 深さ140km、面震源（断層長 約1,259km）: 最大 震度7（計測震度 6.9、羅臼）、震度5弱以上 16/28 観測点
+  （発表機関が公表した予測震度の幅と比べてください。一致すれば、震度予測の段階は誤った入力に対して正しく動いたことになります）
+  M6.9・北緯51.985° 東経157.270° 深さ135km: 最大 震度0（計測震度 -1.0）
+  [D6] ▲ 要注意   速報の入力による予測震度と観測震度の差: 中央値 +4.7（観測の最大 震度0）。
+  [D6] ・ 参考    同じ予測式に正しい M と震源を与えると、観測との差は -1.0。震度予測の段階は入力に忠実で、不具合はその上流（M・震源）にあります。
+  [D6] ・ 参考    すべての観測点が司・翠川式の較正範囲（約300km）の外にあり、予測値は外挿です。
+
+D7 ・ 単一観測点への依存（1点ずつ除いて再計算）
+───────────────────────
+  [D7] ○ 問題なし M を 0.5 超、震源を 144km 超動かす観測点はありません（最大は 稚内、55km）。
+
+D8 ・ 外れ値の読み取り
+───────────
+  [D8] ○ 問題なし すべての読み取りが独立解から ±2.0 秒以内です。
+
+まとめ ― データが支持する不具合の類型
+──────────────────
+  ・観測網の外の地震: 観測網から見た方向に沿って震源が決まりにくい（関係式に依存しない）。
+  ・マグニチュードの計算に、700km の除外範囲を超える観測点が使われた（関係式に依存しない）。
+  ・マグニチュードと震度予測で異なる震源が使われた（関係式に依存しない）。
+  ・震度の過大予測は M・震源の入力に起因し、震度予測式そのものは正常。
+
+  観測データだけでは判断できないこと: 除外機能などの歯止めが働かなかった原因が、改修時のデグレードか、設定変更か、
+  無許可の改変か。これには発表機関の変更履歴が必要です。

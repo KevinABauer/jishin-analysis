@@ -1,5 +1,5 @@
 {
-  "source": "JMA",
+  "source": "気象庁",
   "serial": 17,
   "info_type": "発表",
   "region": "千島列島",
@@ -17,7 +17,7 @@
     "depth_km": 140
   },
   "notes": [
-    "serial/issue/detection time, hypocentre 48.2N 153.4E 140 km and M9.9 are as published on JMA's 緊急地震速報(警報)発表状況 page for this event",
-    "hypocenter_magnitude is a RECONSTRUCTION: JMA stated M was computed ~680 km farther from Japan than the true source; exact coordinates not published"
+    "第17報、発表時刻、地震波検知時刻、震源（北緯48.2度・東経153.4度・深さ140km）、M9.9 は、気象庁「緊急地震速報（警報）発表状況」の本事案ページに公表された値",
+    "hypocenter_magnitude は【再構成】。気象庁は M を真の震源より日本から約680km 遠い位置で計算したと説明しているが、座標は公表されていない"
   ]
 }
